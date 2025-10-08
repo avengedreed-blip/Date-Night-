@@ -1,3 +1,9 @@
+:root {
+  color-scheme: dark;
+  --light-x: 50vw;
+  --light-y: 50vh;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
