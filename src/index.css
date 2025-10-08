@@ -1,12 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400..900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   color-scheme: dark;
   --light-x: 50vw;
   --light-y: 50vh;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* Base */
 html,
@@ -243,3 +245,69 @@ button {
 .settings-section {
   contain: layout paint size style;
 }
+
+/* === MODAL STACK FIX === */
+/* ensures all modals and their controls appear above HDR, aurora, vignette, etc. */
+
+.modal-metallic,
+.modal-close-button,
+.modal-header,
+.modal-body,
+.modal-footer {
+  position: relative;
+  z-index: 9999 !important;
+  isolation: isolate; /* prevents backdrop blending from swallowing it */
+}
+
+/* internal gradients / reflections stay underneath modal content */
+.modal-metallic::before,
+.modal-metallic::after {
+  z-index: 9998 !important;
+}
+
+/* Settings panels and sub-modals still above main UI but below dialogs */
+.settings-section {
+  z-index: 9997 !important;
+}
+
+/* close button highest in the stack */
+.modal-close-button {
+  z-index: 10000 !important;
+}
+
+/* optional fade-in micro-animation for polish */
+.modal-metallic {
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+/* === FINAL MODAL STACK FIX === */
+.modal-metallic,
+.modal-close-button,
+.modal-header,
+.modal-body,
+.modal-footer,
+.modal-content-text,
+.settings-section,
+.confirm-modal,
+.editor-modal,
+.prompt-modal,
+.extreme-intro-modal {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 99999 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.modal-backdrop {
+  position: fixed !important;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
+  z-index: 99998 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+

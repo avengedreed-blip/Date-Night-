@@ -124,67 +124,76 @@ const audioEngine = (() => {
         };
     };
 
-    const publicApi = {
-        async initialize() {
-            if (isInitialized || !window.Tone) return false;
-            try { 
-                if (window.Tone.context.state !== 'running') await window.Tone.start();
-                
-                const Tone = window.Tone;
+const publicApi = {
+  async initialize() {
+    if (isInitialized || !window.Tone) return false;
+    try { 
+      if (window.Tone.context.state !== 'running') await window.Tone.start();
 
-                // ✅ Audio context tuning fix
-                const ctx = Tone.getContext();
-                Tone.context.lookAhead = 0.03;
-                Tone.Transport.lookAhead = 0.03;
-                console.log("Audio context latency:", ctx.latencyHint);
+      const ctx = window.Tone.getContext();
+      if (ctx.rawContext) {
+        // Tone.js v14+ exposes latencyHint as read-only
+        window.Tone.context.lookAhead = 0.03;
+        window.Tone.Transport.lookAhead = 0.03;
+        console.log("Audio context latency hint (read-only):", ctx.rawContext.latencyHint);
+      } else {
+        window.Tone.context.lookAhead = 0.03;
+        window.Tone.Transport.lookAhead = 0.03;
+        console.log("Audio context latency:", ctx.latencyHint);
+      }
 
-                createChannels(); 
-                createSynths(); 
-                createThemes(); 
-                isInitialized = true; 
-                console.log("Audio Engine Initialized."); 
-                return true; 
-            } 
-            catch (e) { console.error("Audio Engine Init Error:", e); return false; }
-        },
-        async startTheme(themeName) {
-            const Tone = window.Tone;
-            if (!isInitialized || !Tone || !themes[themeName]) return;
+      createChannels();
+      createSynths();
+      createThemes();
+      isInitialized = true;
+      console.log("Audio Engine Initialized.");
+      return true; 
+    } 
+    catch (e) { 
+      console.error("Audio Engine Init Error:", e); 
+      return false; 
+    }
+  }, // ✅ ends initialize() only — no extra braces here
 
-            if (Tone.context.state !== "running") {
-              await Tone.start();
-            }
-            if (Tone.Transport.state !== "started") {
-              Tone.Transport.start();
-            }
+  async startTheme(themeName) {
+    const Tone = window.Tone;
+    if (!isInitialized || !Tone || !themes[themeName]) return;
 
-            if (activeTheme && activeTheme.name === themeName) return;
+    if (Tone.context.state !== "running") {
+      await Tone.start();
+    }
+    if (Tone.Transport.state !== "started") {
+      Tone.Transport.start();
+    }
 
-            const startNewThemeAndFadeIn = () => {
-                if (activeTheme) {
-                    if (activeTheme.cleanup) activeTheme.cleanup();
-                    activeTheme.parts.forEach(p => {
-                        if (p.stop) p.stop(0);
-                        if (p.cancel) p.cancel(0);
-                    });
-                }
+    if (activeTheme && activeTheme.name === themeName) return;
 
-                activeTheme = themes[themeName];
-                activeTheme.name = themeName;
-                
-                Tone.Transport.bpm.value = activeTheme.bpm;
-                if (activeTheme.init) activeTheme.init();
-                activeTheme.parts.forEach(p => p.start(0));
-                musicChannel.volume.rampTo(userMusicVolume, 1.5);
-            };
+    const startNewThemeAndFadeIn = () => {
+      if (activeTheme) {
+        if (activeTheme.cleanup) activeTheme.cleanup();
+        activeTheme.parts.forEach(p => {
+          if (p.stop) p.stop(0);
+          if (p.cancel) p.cancel(0);
+        });
+      }
 
-            if (activeTheme && Tone.Transport.state === 'started') {
-                musicChannel.volume.rampTo(-Infinity, 0.5);
-                setTimeout(startNewThemeAndFadeIn, 550);
-            } else {
-                startNewThemeAndFadeIn();
-            }
-        },
+      activeTheme = themes[themeName];
+      activeTheme.name = themeName;
+      
+      Tone.Transport.bpm.value = activeTheme.bpm;
+      if (activeTheme.init) activeTheme.init();
+      activeTheme.parts.forEach(p => p.start(0));
+      musicChannel.volume.rampTo(userMusicVolume, 1.5);
+    };
+
+    if (activeTheme && Tone.Transport.state === 'started') {
+      musicChannel.volume.rampTo(-Infinity, 0.5);
+      setTimeout(startNewThemeAndFadeIn, 550);
+    } else {
+      startNewThemeAndFadeIn();
+    }
+  },
+
         stopTheme() { 
             const Tone = window.Tone; 
             if (!isInitialized || !Tone || !activeTheme) return; 
@@ -1039,184 +1048,117 @@ const PulseMeter = ({ level, bpm }) => {
 };
 
 
-const Modal = ({ isOpen, onClose, children, title, activeVisualTheme, customClasses = '' }) => {
-    const parallax = useParallax(8);
-    
-    useEffect(() => {
-        if (!isOpen) return;
-        const prevActiveElement = document.activeElement;
-        const timerId = setTimeout(() => { const firstFocusableElement = parallax.ref.current?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'); if (firstFocusableElement) { firstFocusableElement.focus(); } else { parallax.ref.current?.focus(); } }, 100);
-        const handleKeyDown = (event) => { 
-            if (event.key === 'Escape') { 
-                onClose(); 
-                return; 
-            } 
-            if (event.key === 'Tab' && parallax.ref.current) { 
-                const focusableElements = Array.from(parallax.ref.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')); 
-                if (focusableElements.length === 0) return; 
-                const firstElement = focusableElements[0]; 
-                const lastElement = focusableElements[focusableElements.length - 1]; 
-                if (event.shiftKey) { 
-                    if (document.activeElement === firstElement) { 
-                        lastElement.focus(); 
-                        event.preventDefault(); 
-                    } 
-                } else { 
-                    if (document.activeElement === lastElement) { 
-                        firstElement.focus(); 
-                        event.preventDefault(); 
-                    } 
-                } 
-            } 
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => { clearTimeout(timerId); document.removeEventListener('keydown', handleKeyDown); if (prevActiveElement && typeof prevActiveElement.focus === 'function') { prevActiveElement.focus(); } };
-    }, [isOpen, onClose, parallax.ref]);
+// --- Modal (drop-in) ---
+const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  activeVisualTheme,
+  customClasses = "",
+}) => {
+  const parallax = useParallax(8);
+  const visible = !!isOpen;
 
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <motion.div className="fixed inset-0 z-[110] flex items-center justify-center p-4" onClick={onClose}
-                    initial={{ backgroundColor: 'rgba(0,0,0,0)' }}
-                    animate={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-                    exit={{ backgroundColor: 'rgba(0,0,0,0)' }}
-                >
-                    <motion.div 
-                        ref={parallax.ref} 
-                        style={parallax.style}
-                        tabIndex={-1} 
-                        className={`relative outline-none w-full max-w-sm flex flex-col modal-metallic ${activeVisualTheme.themeClass} ${customClasses}`} 
-                        onClick={e => e.stopPropagation()} 
-                        initial={{ scale: 0.95, opacity: 0, y: 50, filter: 'blur(20px)' }} 
-                        animate={{ scale: 1, opacity: 1, y: 0, filter: 'blur(0px)', transition: { type: "spring", stiffness: 120, damping: 18 } }} 
-                        exit={{ scale: 0.95, opacity: 0, y: 50, filter: 'blur(20px)', transition: { duration: 0.2 } }} 
-                        role="dialog" 
-                        aria-modal="true" 
-                        aria-live="polite"
-                        aria-labelledby="modal-title"
-                    >
-                        <div className="modal-header">
-                            {title && <h2 id="modal-title" className="modal-title text-3xl text-white">{title}</h2>}
-                            <motion.button aria-label="Close modal" onClick={onClose} className="modal-close-button text-white/70 hover:text-white" whileTap={{scale: 0.9}} whileHover={{scale: 1.1}}><CloseIcon /></motion.button>
-                        </div>
-                        
-                        <div className="modal-body">
-                            {children}
-                        </div>
+  React.useEffect(() => {
+    if (!visible) return;
 
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-};
+    const prevActive = document.activeElement;
+    const focusTimer = setTimeout(() => {
+      const root = parallax.ref.current;
+      const first = root?.querySelector(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      );
+      (first ?? root)?.focus?.();
+    }, 0);
 
-const PromptModal = (props) => ( <Modal {...props} title={props.prompt.title}> <div className="modal-content-text">"{props.prompt.text}"</div> <div className="modal-footer flex flex-col space-y-4 pt-0"> <motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={() => { audioEngine.playCorrect(); props.onClose(); }} className="w-full btn btn--primary">Accept</motion.button> <motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={props.onRefuse} className="w-full btn btn--danger">Refuse</motion.button> </div> </Modal> );
-const ConsequenceModal = (props) => ( <Modal {...props} customClasses="modal-consequence" title="The Price of Refusal!"><div className="modal-content-text"><span className="text-3xl" aria-label="Warning">⚠️</span> {props.text} <span className="text-3xl" aria-label="Warning">⚠️</span></div><div className="modal-footer pt-0"><motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={() => { audioEngine.playCorrect(); props.onClose(); }} className="w-full btn btn--danger">I Accept My Fate</motion.button></div></Modal> );
-const ConfirmModal = (props) => ( <Modal {...props} title={props.title}><div className="modal-content-text">{props.message}</div><div className="modal-footer flex gap-4 pt-0"><motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={props.onClose} className="w-full btn btn--secondary">Cancel</motion.button><motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={() => { audioEngine.playCorrect(); props.onConfirm(); }} className="w-full btn btn--primary">Confirm</motion.button></div></Modal> );
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+        return;
+      }
+      if (e.key === "Tab" && parallax.ref.current) {
+        const nodes = Array.from(
+          parallax.ref.current.querySelectorAll(
+            'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (!nodes.length) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
 
-const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, onMuteToggle, onEditPrompts, onResetPrompts, onThemeChange, currentTheme, userId, onRestart, onQuit, activeVisualTheme, onReducedMotionToggle, reducedMotion }) => {
-    const themes = [
-        { id: 'velourNights', name: 'Velour Nights', grad: 'linear-gradient(135deg, #4c1d2f, #200f18)', chips: ['#FF6F91', '#B266FF', '#FFD700'] },
-        { id: 'lotusDreamscape', name: 'Lotus Dreamscape', grad: 'linear-gradient(135deg, #2D2447, #191526)', chips: ['#FFB7FF', '#7AA2FF', '#E6E6FA'] },
-        { id: 'velvetCarnival', name: 'Velvet Carnival', grad: 'linear-gradient(135deg, #6b2c00, #2e1100)', chips: ['#FF944D', '#FF4C5B', '#FFD700'] },
-        { id: 'starlitAbyss', name: 'Starlit Abyss', grad: 'linear-gradient(135deg, #0A0C24, #0B0F2A)', chips: ['#8A2BE2', '#4169E1', '#A29BFE'] },
-        { id: 'crimsonFrenzy', name: 'Crimson Frenzy', grad: 'linear-gradient(135deg, #4b0000, #1c0000)', chips: ['#FFD700', '#DC143C', '#FF4500'] }
-    ];
-    return ( <Modal isOpen={isOpen} onClose={onClose} title="Settings" activeVisualTheme={activeVisualTheme}>
-        <div className="space-y-6 text-left text-sm">
-            <div className="settings-section space-y-4">
-                <h3 className="text-xl font-bold text-[var(--theme-label)]">Audio Settings</h3>
-                <div>
-                    <label className="font-bold text-white">👑 Master Volume</label>
-                    <input type="range" min="0" max="100" value={settings.masterVolume} onChange={(e) => onSettingsChange({ masterVolume: parseInt(e.target.value) })} className="w-full" />
-                </div>
-                <div>
-                    <label className="font-bold text-white">🎵 Music Volume</label>
-                    <input type="range" min="0" max="100" value={settings.musicVolume} onChange={(e) => onSettingsChange({ musicVolume: parseInt(e.target.value) })} className="w-full" />
-                </div>
-                <div>
-                    <label className="font-bold text-white">🔊 Effects Volume</label>
-                    <input type="range" min="0" max="100" value={settings.sfxVolume} onChange={(e) => onSettingsChange({ sfxVolume: parseInt(e.target.value) })} className="w-full" />
-                </div>
-                <button onClick={onMuteToggle} className="w-full btn btn--secondary flex items-center justify-center gap-2"><SpeakerIcon muted={isMuted} />{isMuted ? 'Unmute All' : 'Mute All'}</button>
-            </div>
-            <div className="settings-section space-y-3">
-                <h3 className="text-xl font-bold text-[var(--theme-label)]">Theme & Music</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {themes.map(theme => (
-                        <div key={theme.id} onClick={() => onThemeChange(theme.id)} className={`theme-swatch ${currentTheme === theme.id ? 'ring-2 ring-[var(--theme-highlight)]' : ''}`} style={{'--swatch-grad': theme.grad}}>
-                            <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{background: theme.grad}} />
-                            <span className="font-bold text-xs">{theme.name}</span>
-                            <div className="theme-chips ml-auto">
-                               {theme.chips.map(c => <div key={c} className="theme-chip" style={{backgroundColor: c}}/>)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-             <div className="settings-section space-y-3">
-                <h3 className="text-xl font-bold text-[var(--theme-label)]">Accessibility</h3>
-                 <label className="flex items-center justify-between cursor-pointer">
-                     <span className="font-bold text-white">Reduce Motion</span>
-                     <div className="relative">
-                         <input type="checkbox" className="sr-only" checked={reducedMotion} onChange={onReducedMotionToggle} />
-                         <div className={`block w-12 h-6 rounded-full transition ${reducedMotion ? 'bg-[var(--theme-highlight)]' : 'bg-black/30'}`}></div>
-                         <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${reducedMotion ? 'translate-x-6' : ''}`}></div>
-                     </div>
-                 </label>
-            </div>
-            <div className="settings-section space-y-3">
-                <h3 className="text-xl font-bold text-[var(--theme-label)]">Game Management</h3>
-                <button onClick={onEditPrompts} className={`w-full btn btn--primary flex items-center justify-center gap-2`}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Customize Prompts</button>
-                <button onClick={onResetPrompts} className="btn btn--inline w-full">Reset All Prompts to Defaults</button>
-                <div className="flex gap-2 pt-2">
-                    <button onClick={onRestart} className="btn btn--secondary w-full">Restart Game</button>
-                    <button onClick={onQuit} className="btn btn--danger w-full">Quit Game</button>
-                </div>
-                {userId && <p className="text-[10px] text-center text-white/50 pt-2 break-all px-4">Session ID: {userId}</p>}
-            </div>
-        </div>
-    </Modal> );
-};
-
-const EditorModal = ({ isOpen, onClose, prompts, onReset, activeVisualTheme }) => { const [category, setCategory] = useState('truthPrompts'); const [subCategory, setSubCategory] = useState('normal'); const [editorPrompts, setEditorPrompts] = useState(prompts); const [scrollState, setScrollState] = useState({ atTop: true, atBottom: false }); const scrollRef = useRef(null); const hasChanges = useMemo(() => JSON.stringify(editorPrompts) !== JSON.stringify(prompts), [editorPrompts, prompts]); const handleScroll = (e) => { const { scrollTop, scrollHeight, clientHeight } = e.target; setScrollState({ atTop: scrollTop < 5, atBottom: scrollHeight - scrollTop - clientHeight < 5 }); }; useEffect(() => { setEditorPrompts(prompts); }, [prompts, isOpen]); useEffect(() => { if (editorPrompts[category]) { const subKeys = Object.keys(editorPrompts[category]); if (subKeys.length > 0) { setSubCategory(subKeys[0]); } else { setSubCategory(null); } } }, [category, editorPrompts]); const handlePromptChange = (sub, index, value) => { const newPrompts = JSON.parse(JSON.stringify(editorPrompts)); newPrompts[category][sub][index] = value; setEditorPrompts(newPrompts); }; const handlePromptDelete = (sub, index) => { const newPrompts = JSON.parse(JSON.stringify(editorPrompts)); newPrompts[category][sub] = newPrompts[category][sub].filter((_, i) => i !== index); setEditorPrompts(newPrompts); }; const handleAddPrompt = (sub) => { audioEngine.playUIConfirm(); const newPrompts = JSON.parse(JSON.stringify(editorPrompts)); newPrompts[category][sub].push(''); setEditorPrompts(newPrompts); setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 50); }; const handleCloseAndSave = () => { onClose(hasChanges ? editorPrompts : null); }; const subCategoryKeys = ['truthPrompts', 'darePrompts', 'consequences']; const isCustomPrompt = (cat, sub, p) => !defaultPrompts[cat]?.[sub]?.includes(p); return ( <Modal isOpen={isOpen} onClose={() => onClose(null)} title="Customize Your Game" activeVisualTheme={activeVisualTheme}><div className="w-full flex flex-col text-left"><div className="flex border-b border-[var(--theme-highlight)]/30 mb-2 flex-shrink-0 overflow-x-auto pb-1">{Object.keys(prompts).map(key => (<button key={key} className={`py-2 px-4 font-bold text-sm whitespace-nowrap rounded-t-lg transition-colors ${category === key ? 'text-[var(--theme-label)]' : 'text-white/50 hover:text-white/80'}`} onClick={() => { audioEngine.playWheelTick(); setCategory(key); }}>{key.replace(/Prompts|Questions/g, '').toUpperCase()}</button>))}</div>{subCategory && subCategoryKeys.includes(category) && (<div className="flex border-b border-[var(--theme-highlight)]/20 mb-4 flex-shrink-0 overflow-x-auto pb-1">{Object.keys(editorPrompts[category]).map(subKey => (<button key={subKey} className={`py-1 px-3 text-xs font-semibold rounded-full mr-2 transition-colors ${subCategory === subKey ? 'bg-[var(--theme-highlight)] text-black' : 'bg-black/20 text-white/70 hover:bg-black/40'}`} onClick={() => { audioEngine.playWheelTick(); setSubCategory(subKey);}}>{subKey}</button>))}</div>)}<div className="space-y-6 relative editor-scroll-container" data-at-top={scrollState.atTop} data-at-bottom={scrollState.atBottom}><div ref={scrollRef} onScroll={handleScroll} className="editor-scroll-area">{editorPrompts[category] && (subCategoryKeys.includes(category) ? (subCategory && <div className="settings-section p-2 sm:p-4"><div className="space-y-2"><AnimatePresence initial={false}>{(editorPrompts[category][subCategory] || []).map((prompt, index) => (<motion.div key={`${category}-${subCategory}-${index}`} className="flex items-center space-x-3 bg-black/20 p-2 rounded-xl border border-white/10" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>{isCustomPrompt(category, subCategory, prompt) && <CustomPromptIcon />}<input type="text" value={prompt} onChange={(e) => handlePromptChange(subCategory, index, e.target.value)} className="w-full bg-transparent text-white placeholder-white/50 focus:outline-none p-1 font-['Inter',_sans-serif] text-sm" /><motion.button onClick={() => { audioEngine.playRefuse(); handlePromptDelete(subCategory, index); }} aria-label="Delete prompt" whileTap={{ scale: 0.8 }}><TrashIcon /></motion.button></motion.div>))}</AnimatePresence></div><button onClick={() => handleAddPrompt(subCategory)} className="btn btn--inline w-full mt-3 !py-2">+ Add Prompt</button></div>) : Object.entries(editorPrompts[category]).map(([group, list]) => (<div key={group} className="settings-section p-2 sm:p-4"><h3 className="text-lg font-bold text-[var(--theme-label)] capitalize mb-3 border-b border-[var(--theme-highlight)]/30 pb-1">{group}</h3><div className="space-y-2"><AnimatePresence initial={false}>{list.map((prompt, index) => (<motion.div key={`${category}-${group}-${index}`} className="flex items-center space-x-3 bg-black/20 p-2 rounded-xl border border-white/10" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>{isCustomPrompt(category, group, prompt) && <CustomPromptIcon />}<input type="text" value={prompt} onChange={(e) => handlePromptChange(group, index, e.target.value)} className="w-full bg-transparent text-white placeholder-white/50 focus:outline-none p-1 font-['Inter',_sans-serif] text-sm" /><motion.button onClick={() => { audioEngine.playRefuse(); handlePromptDelete(group, index); }} aria-label="Delete prompt" whileTap={{ scale: 0.8 }}><TrashIcon /></motion.button></motion.div>))}</AnimatePresence></div><button onClick={() => handleAddPrompt(group)} className="btn btn--inline w-full mt-3 !py-2">+ Add Prompt</button></div>)))}</div></div></div><div className="modal-footer mt-6 space-y-3"><button onClick={handleCloseAndSave} className="w-full btn btn--primary">{hasChanges ? "Save & Close" : "Close"}</button><button onClick={onReset} className="btn btn--inline w-full">Reset All to Defaults</button></div></Modal> ); };
-
-const AudioUnlockScreen = ({ onUnlock, disabled, activeVisualTheme }) => ( <div className={`min-h-screen font-['Inter',_sans-serif] flex flex-col items-center justify-center p-4 overflow-hidden ${activeVisualTheme.themeClass}`}><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} className="text-center"><motion.h1 className={`text-7xl md:text-8xl font-['Great_Vibes'] tracking-widest ${activeVisualTheme.titleText}`} style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>Pulse</motion.h1><motion.p className="text-[#FFC0CB] text-lg md:text-xl mt-2 mb-12 italic" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, delay: 0.8 }}>A Game of Intimate Challenges</motion.p><motion.button onClick={onUnlock} disabled={disabled} className="relative btn btn--primary begin-button text-white font-bold py-4 px-12 text-2xl disabled:opacity-50 overflow-hidden" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 1.2, type: 'spring', stiffness: 120 }}><span className="relative z-10">Tap to Begin</span></motion.button>{disabled && (<p className="text-red-400 mt-4 text-sm">Could not load audio. Sound is disabled.</p>)}</motion.div></div> );
-const OnboardingIntro = ({ onNext, activeVisualTheme }) => ( <div className={`min-h-screen w-full flex items-center justify-center font-['Inter',_sans-serif] ${activeVisualTheme.themeClass}`}><motion.div className="relative z-10 w-full max-w-md text-center p-4"><h2 className={`text-3xl sm:text-4xl font-bold mb-2 ${activeVisualTheme.titleText}`} style={{filter: `drop-shadow(0 0 10px ${activeVisualTheme.titleShadow})`}}>Set the Mood</h2><p className="text-white/80 mb-8">First, let's create the perfect atmosphere for your night.</p><motion.button onClick={onNext} className="w-full btn btn--primary font-bold py-3 px-4 rounded-full text-lg mt-4">Next</motion.button></motion.div></div>);
-const OnboardingVibePicker = ({ onVibeSelect, activeVisualTheme, currentTheme }) => { const themes = [ { id: 'velourNights', name: 'Velour Nights' }, { id: 'lotusDreamscape', name: 'Lotus Dreamscape' }, { id: 'velvetCarnival', name: 'Velvet Carnival' }, { id: 'starlitAbyss', name: 'Starlit Abyss' }, { id: 'crimsonFrenzy', name: 'Crimson Frenzy' } ]; return ( <div className={`min-h-screen w-full flex items-center justify-center font-['Inter',_sans-serif] ${activeVisualTheme.themeClass}`}><motion.div className="relative z-10 w-full max-w-md text-center p-4"><h2 className={`text-3xl sm:text-4xl font-bold mb-8 ${activeVisualTheme.titleText}`} style={{filter: `drop-shadow(0 0 10px ${activeVisualTheme.titleShadow})`}}>Pick Your Vibe</h2><div className="grid grid-cols-1 gap-3">{themes.map(theme => ( <button key={theme.id} onClick={() => onVibeSelect(theme.id)} className={`theme-swatch text-left ${currentTheme === theme.id ? 'ring-2 ring-[var(--theme-highlight)]' : ''}`} > <span className="font-bold text-sm">{theme.name}</span> </button> ))}</div></motion.div></div> );};
-const PlayerNameScreen = ({ onStart, activeVisualTheme }) => { const [p1, setP1] = useState(''); const [p2, setP2] = useState(''); const handleSubmit = (e) => { e.preventDefault(); onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }; return ( <div className={`min-h-screen w-full flex items-center justify-center font-['Inter',_sans-serif] ${activeVisualTheme.themeClass}`}><motion.div className="relative z-10 w-full max-w-md text-center p-4"><h2 className={`text-3xl sm:text-4xl font-bold mb-8 ${activeVisualTheme.titleText}`} style={{filter: `drop-shadow(0 0 10px ${activeVisualTheme.titleShadow})`}}>Who's feeling the Pulse?</h2><form onSubmit={handleSubmit} className="flex flex-col gap-6"><div className="metallic-input-wrapper p-1"><input type="text" value={p1} onChange={e => setP1(e.target.value)} placeholder="Player 1 Name..." className="w-full text-white p-3 rounded-full text-center placeholder:text-white/50 focus:outline-none" /></div><div className="metallic-input-wrapper p-1"><input type="text" value={p2} onChange={e => setP2(e.target.value)} placeholder="Player 2 Name..." className="w-full text-white p-3 rounded-full text-center placeholder:text-white/50 focus:outline-none" /></div><motion.button type="submit" className="w-full btn btn--primary font-bold py-3 px-4 rounded-full text-lg mt-4">Start Game</motion.button></form></motion.div></div> ); };
-const TurnBanner = ({ playerName }) => ( <motion.div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[120] pointer-events-none bg-black/50 backdrop-blur-md border border-[var(--theme-highlight)] shadow-xl px-8 py-3 rounded-full" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20, transition: { delay: 2.5, duration: 0.3 } }}><h2 className="text-xl sm:text-2xl font-bold tracking-wide text-[var(--theme-highlight)]">It's {playerName}'s turn!</h2></motion.div> );
-const ExtremeIntroEffect = ({ theme, reducedMotion }) => { if (reducedMotion) { return <div className={`fixed inset-0 z-[125] pointer-events-none extreme-effect-bg ${theme}`} />; } const variants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.5 } }, exit: { opacity: 0, transition: { duration: 2, delay: 1 } } }; return ( <motion.div key={theme} variants={variants} initial="hidden" animate="visible" exit="exit" className={`fixed inset-0 z-[125] pointer-events-none overflow-hidden extreme-effect-bg ${theme}`}> {theme === 'crimsonFrenzy' && <div className="extreme-scanlines" />} {theme === 'velvetCarnival' && <div className="extreme-neon-edge" />} </motion.div> );};
-const ExtremeIntroModal = (props) => ( <Modal {...props} title="🔥 EXTREME ROUND! 🔥"><div className="modal-content-text"><p className="mb-2 font-['Inter',_sans-serif] text-lg leading-relaxed text-white/90">This is an Extreme Only round!</p><p className="leading-relaxed text-white">Only the most intense truths, dares, and consequences are available. Good luck!</p></div><div className="modal-footer pt-0"><motion.button whileHover={{translateY: -1, scale: 1.02}} whileTap={{scale: 0.96}} transition={{duration: 0.15, ease: 'easeOut'}} onClick={props.onClose} className="w-full btn btn--primary py-3 px-4 rounded-full text-lg">I'm Ready</motion.button></div></Modal> );
-const NoiseOverlay = ({ reducedMotion }) => ( <div className={`fixed inset-0 z-10 opacity-[0.03] pointer-events-none ${reducedMotion ? '' : 'noise-animated'}`} /> );
-const Vignette = () => <div className="fixed inset-0 z-10 pointer-events-none vignette-overlay"></div>;
-const PowerSurgeEffect = ({ onComplete, reducedMotion }) => ( <motion.div className="fixed inset-0 z-[130] pointer-events-none bg-power-surge" initial={{ opacity: 0, scale: 0 }} animate={{ opacity: [0, 0.8, 0], scale: [0, 1.2, 1.5] }} transition={{ duration: reducedMotion ? 0 : 0.8, ease: "easeOut" }} onAnimationComplete={onComplete} /> );
-
-const RadialLighting = ({ reducedMotion }) => {
-    const lightRef = useRef(null);
-    useEffect(() => {
-        if (reducedMotion) return;
-        const el = lightRef.current;
-        if (!el) return;
-
-        const handlePointerMove = (e) => {
-            const { clientX, clientY } = e.touches ? e.touches[0] : e;
-            el.style.setProperty('--light-x', `${clientX}px`);
-            el.style.setProperty('--light-y', `${clientY}px`);
-        };
-        
-        window.addEventListener('mousemove', handlePointerMove);
-        window.addEventListener('touchmove', handlePointerMove);
-
-        return () => {
-            window.removeEventListener('mousemove', handlePointerMove);
-            window.removeEventListener('touchmove', handlePointerMove);
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
         }
-    }, [reducedMotion]);
+      }
+    };
 
-    if (reducedMotion) return null;
-    return <div ref={lightRef} className="radial-light-overlay" />
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKeyDown);
+      prevActive?.focus?.();
+    };
+  }, [visible, onClose, parallax.ref]);
+
+  // Render nothing when closed
+  if (!visible) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+        onClick={onClose}
+        initial={{ backgroundColor: "rgba(0,0,0,0)" }}
+        animate={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        exit={{ backgroundColor: "rgba(0,0,0,0)" }}
+      >
+        <motion.div
+          ref={parallax.ref}
+          style={parallax.style}
+          tabIndex={-1}
+          className={`relative outline-none w-full max-w-sm flex flex-col modal-metallic ${
+            activeVisualTheme?.themeClass ?? ""
+          } ${customClasses}`}
+          onClick={(e) => e.stopPropagation()}
+          initial={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
+          animate={{ scale: 1, opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
+          transition={{ type: "tween", duration: 0.25 }} // avoids negative blur warnings
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
+          <div className="modal-header">
+            {title && (
+              <h2 id="modal-title" className="modal-title text-3xl text-white">
+                {title}
+              </h2>
+            )}
+            <motion.button
+              aria-label="Close modal"
+              onClick={onClose}
+              className="modal-close-button text-white/70 hover:text-white"
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.1 }}
+            >
+              <CloseIcon />
+            </motion.button>
+          </div>
+
+          <div className="modal-body">{children}</div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
 
 function App() {
@@ -1278,20 +1220,21 @@ function App() {
         }
     }, [isSpinInProgress]);
 
-    // Failsafe to clean up modal state if animation/unmount glitches
-    useEffect(() => {
-        if (modalState.type && gameState === 'playing') {
-            const resetTimer = setTimeout(() => {
-                if (modalState.type && !document.querySelector('[role="dialog"]')) {
-                    console.warn("Failsafe: Resetting stale modal state.");
-                    setModalState({ type: null, data: {} });
-                }
-            }, 1200);
-            return () => clearTimeout(resetTimer);
-        }
-    }, [modalState.type, gameState]);
+    // 🛡️ Smarter Failsafe: only cleans up *stuck* modals after 10s idle
+useEffect(() => {
+  if (modalState.type && gameState === "playing") {
+    const resetTimer = setTimeout(() => {
+      // Check again before resetting to avoid nuking active modals
+      const activeDialog = document.querySelector('[role="dialog"]');
+      if (!activeDialog && modalState.type) {
+        console.warn("Failsafe: Resetting stale modal state.");
+        setModalState({ type: null, data: {} });
+      }
+    }, 10000); // ⏱ waits 10s instead of 1.2s
+    return () => clearTimeout(resetTimer);
+  }
+}, [modalState.type, gameState]);
 
-    
     useEffect(() => {
         let timer;
         if (gameState === 'turnIntro') {
@@ -1386,8 +1329,50 @@ function App() {
             setPendingExtremeRound(null); 
         } 
     }, [isSpinInProgress, modalState.type, pendingExtremeRound, triggerExtremeRound]);
-    
-    const handleUnlockAudio = useCallback(async () => {
+
+// 🔊 Audio unlock on first user interaction (browser-safe)
+useEffect(() => {
+  const handleUserGesture = async () => {
+    try {
+      const success = await audioEngine.initialize();
+      if (success) {
+        window.removeEventListener("click", handleUserGesture);
+        window.removeEventListener("touchstart", handleUserGesture);
+        console.log("✅ Audio engine initialized after user gesture");
+      }
+    } catch (e) {
+      console.error("Audio init retry failed:", e);
+    }
+  };
+
+  window.addEventListener("click", handleUserGesture);
+  window.addEventListener("touchstart", handleUserGesture);
+
+  // 🛡️ Failsafe: auto-resume if the AudioContext gets suspended (mobile Safari fix)
+  const resumeAudio = async () => {
+    const ctx = window.Tone?.context;
+    if (ctx && ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+        // 💡 optional micro-polish: silence success log to keep console clean
+        // console.log("🔁 Audio context resumed automatically");
+      } catch (err) {
+        console.warn("Audio resume attempt failed:", err);
+      }
+    }
+  };
+
+  const resumeInterval = setInterval(resumeAudio, 10000); // check every 10s
+
+  // ✅ single unified cleanup return
+  return () => {
+    window.removeEventListener("click", handleUserGesture);
+    window.removeEventListener("touchstart", handleUserGesture);
+    clearInterval(resumeInterval);
+  };
+}, []);
+
+        const handleUnlockAudio = useCallback(async () => {
         if (scriptLoadState !== 'loaded' || isUnlockingAudio) {
             if (scriptLoadState !== 'loaded') setAudioInitFailed(true);
             setGameState('onboarding_intro');
@@ -1561,39 +1546,146 @@ function App() {
         };
 
         if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
-        
-        return (
-            <AnimatePresence mode="wait" initial={false}>
-                {gameState === 'unlock' && <motion.div key="unlock"><AudioUnlockScreen onUnlock={handleUnlockAudio} disabled={scriptLoadState !== 'loaded' || isUnlockingAudio} {...onboardingProps} /></motion.div>}
-                {gameState === 'onboarding_intro' && <motion.div key="onboarding_intro" {...motionProps}><OnboardingIntro onNext={() => setGameState('onboarding_vibe')} {...onboardingProps} /></motion.div>}
-                {gameState === 'onboarding_vibe' && <motion.div key="onboarding_vibe" {...motionProps}><OnboardingVibePicker currentTheme={currentTheme} onVibeSelect={(theme) => { handleThemeChange(theme); setGameState('enterNames'); }} {...onboardingProps} /></motion.div>}
-                {gameState === 'enterNames' && <motion.div key="enterNames" {...motionProps}><PlayerNameScreen onStart={handleNameEntry} {...onboardingProps} /></motion.div>}
-                {(gameState === 'playing' || gameState === 'turnIntro') && (
-                    <motion.div key="playing" initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} transition={{duration: 0.5}}>
-                        <div ref={mainContentRef} className='w-full h-full z-[60] flex flex-col'>
-                            <header className="relative w-full flex justify-center items-center p-4 pt-6 shrink-0">
-                                <h1 className={`text-6xl ${activeVisualTheme.titleText} font-['Great_Vibes']`} style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>Pulse</h1>
-                                <motion.button onClick={() => { audioEngine.playUIConfirm(); setModalState({ type: 'settings' }); }} className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg" whileTap={{ scale: 0.9, rotate: -15 }} whileHover={{ scale: 1.15, rotate: 15, boxShadow: '0 0 25px var(--theme-highlight)' }} aria-label="Settings">
-                                    <SettingsIcon />
-                                </motion.button>
-                            </header>
-                            <main className="w-full flex-grow flex flex-col items-center justify-center px-4" style={{ perspective: "1000px" }}>
-                                <div className="relative w-[min(85vw,380px)] sm:w-[min(55vh,420px)] aspect-square mt-[clamp(2rem,8vh,5rem)]">
-                                    <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={backgroundTheme} canSpin={!modalState.type && gameState === 'playing' && !isSpinInProgress} reducedMotion={prefersReducedMotion} />
-                                </div>
-                            </main>
-                            <footer className="w-full p-4 flex flex-col items-center shrink-0 mb-[clamp(2rem,8vh,5rem)]">
-                                <div className="w-full max-w-md">
-                                    <PulseMeter level={pulseLevel} bpm={audioEngine.getCurrentBpm()} />
-                                </div>
-                            </footer>
-                            {audioInitFailed && (<div className="fixed bottom-24 right-4 z-[60] bg-red-900/50 text-white text-xs px-3 py-1 rounded-full border border-red-500 backdrop-blur-sm">Audio failed to initialize.</div>)}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        );
-    }
+        {console.log("ModalState:", modalState)}
+
+        // === 🧭 Primary Game State Screen Flow ===
+return (
+  <AnimatePresence mode="wait" initial={false}>
+    {gameState === "unlock" && (
+      <motion.div
+        key="unlock"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <AudioUnlockScreen
+          onUnlock={handleUnlockAudio}
+          disabled={scriptLoadState !== "loaded" || isUnlockingAudio}
+          {...onboardingProps}
+        />
+      </motion.div>
+    )}
+
+    {gameState === "onboarding_intro" && (
+      <motion.div key="onboarding_intro" {...motionProps}>
+        <OnboardingIntro
+          onNext={() => setGameState("onboarding_vibe")}
+          {...onboardingProps}
+        />
+      </motion.div>
+    )}
+
+    {gameState === "onboarding_vibe" && (
+      <motion.div key="onboarding_vibe" {...motionProps}>
+        <OnboardingVibePicker
+          currentTheme={currentTheme}
+          onVibeSelect={(theme) => {
+            handleThemeChange(theme);
+            setGameState("enterNames");
+          }}
+          {...onboardingProps}
+        />
+      </motion.div>
+    )}
+
+ {gameState === "enterNames" && (
+  <motion.div key="enterNames" {...motionProps}>
+    <PlayerNameScreen // ✅ Re-add the component name here
+      onStart={handleNameEntry}
+      {...onboardingProps}
+    />
+  </motion.div>
+)}
+
+
+    {(gameState === "playing" || gameState === "turnIntro") && (
+      <motion.div
+        key="playing"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div
+          ref={mainContentRef}
+          className="w-full h-full z-[60] flex flex-col"
+        >
+          {/* === Header === */}
+          <header className="relative w-full flex justify-center items-center p-4 pt-6 shrink-0">
+            <h1
+              className={`text-6xl ${activeVisualTheme.titleText} font-['Great_Vibes']`}
+              style={{
+                filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})`,
+              }}
+            >
+              Pulse
+            </h1>
+
+            {/* Settings Button */}
+            <motion.button
+              onClick={() => {
+                audioEngine.playUIConfirm();
+                setModalState({ type: "settings" });
+              }}
+              className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg"
+              whileTap={{ scale: 0.9, rotate: -15 }}
+              whileHover={{
+                scale: 1.15,
+                rotate: 15,
+                boxShadow: "0 0 25px var(--theme-highlight)",
+              }}
+              aria-label="Settings"
+            >
+              <SettingsIcon />
+            </motion.button>
+          </header>
+
+          {/* === Main Game Area === */}
+          <main
+            className="w-full flex-grow flex flex-col items-center justify-center px-4"
+            style={{ perspective: "1000px" }}
+          >
+            <div className="relative w-[min(85vw,380px)] sm:w-[min(55vh,420px)] aspect-square mt-[clamp(2rem,8vh,5rem)]">
+              <Wheel
+                onSpinFinish={handleSpinFinish}
+                playWheelSpinStart={audioEngine.playWheelSpinStart}
+                playWheelTick={audioEngine.playWheelTick}
+                playWheelStop={audioEngine.playWheelStopSound}
+                setIsSpinInProgress={setIsSpinInProgress}
+                currentTheme={backgroundTheme}
+                canSpin={
+                  !modalState.type &&
+                  gameState === "playing" &&
+                  !isSpinInProgress
+                }
+                reducedMotion={prefersReducedMotion}
+              />
+            </div>
+          </main>
+
+          {/* === Pulse Meter Footer === */}
+          <footer className="w-full p-4 flex flex-col items-center shrink-0 mb-[clamp(2rem,8vh,5rem)]">
+            <div className="w-full max-w-md">
+              <PulseMeter
+                level={pulseLevel}
+                bpm={audioEngine.getCurrentBpm()}
+              />
+            </div>
+          </footer>
+
+          {/* === Audio Error Badge === */}
+          {audioInitFailed && (
+            <div className="fixed bottom-24 right-4 z-[60] bg-red-900/50 text-white text-xs px-3 py-1 rounded-full border border-red-500 backdrop-blur-sm">
+              Audio failed to initialize.
+            </div>
+          )}
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+    };
 
     return (
         <div id="app-container" className={`min-h-screen font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`} style={{'--pulse-glow-intensity': `${pulseLevel / 100}`, '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`}}>
@@ -1665,18 +1757,7 @@ function App() {
                     .btn--danger:active:not(:disabled) { box-shadow: inset 0 10px 18px rgba(0,0,0,.6); }
                     .btn--inline{ padding:.5rem .9rem; font-weight:700; border-radius:9999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color: var(--theme-label); text-align:center;}
                     .btn--inline:hover{ filter:brightness(1.1); box-shadow: 0 0 8px -4px var(--theme-highlight); }
-
-                    .modal-close-button{ min-width:44px; min-height:44px; padding:6px; position: absolute; top: .5rem; right: .5rem; display:flex; align-items:center; justify-content:center; border-radius: 50%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); z-index: 20; cursor: pointer; backdrop-filter: blur(5px); }
-                    .modal-close-button:hover{ filter: drop-shadow(0 0 5px var(--theme-highlight)); }
-                    .modal-metallic{ position:relative; overflow:hidden; background-clip: padding-box; border-radius:24px; border:1px solid rgba(255,255,255,.12); background:linear-gradient(180deg, rgba(15,10,20,.8), rgba(10,6,16,.65)); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); box-shadow:0 24px 60px rgba(0,0,0,.5); }
-                    .modal-metallic::before{ content:''; position:absolute; inset:0; border-radius:inherit; background: linear-gradient(to bottom, rgba(255,255,255,0.04), rgba(255,255,255,0.02) 40%, transparent 80%); pointer-events:none; }
-                    .modal-header{ display:flex; align-items:center; justify-content:center; padding:1rem 1rem 0; text-align: center; }
-                    .modal-title{ font-weight:900; letter-spacing:.02em; position:relative; padding-bottom: 1rem;}
-                    .modal-title::after{ content:''; display:block; height:3px; width:120px; margin:.4rem auto 0; border-radius:9999px; background:linear-gradient(90deg, transparent, white, transparent); animation: modal-title-shimmer 1s ease-in-out; }
-                    .modal-body{ max-height:min(70vh, 560px); overflow:auto; padding:1rem; text-align: center; }
-                    .modal-content-text { text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
-                    .modal-footer{ position:sticky; bottom:0; padding:1rem 1rem 1rem; background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.25)); backdrop-filter:blur(10px); }
-                    
+                  
                     .editor-scroll-container::before, .editor-scroll-container::after { content:''; position:absolute; left:0; right:0; height:30px; z-index:1; pointer-events:none; transition: opacity .2s ease; }
                     .editor-scroll-container::before { top:0; background:linear-gradient(to bottom, rgba(10,6,16,1), transparent); }
                     .editor-scroll-container::after { bottom:0; background:linear-gradient(to top, rgba(10,6,16,1), transparent); }
@@ -1783,45 +1864,195 @@ function App() {
                       contain: layout paint size style;
                     }
                 `}</style>
-                <div className={`bg-layer ${activeBg === 1 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`}></div>
-                <div className={`bg-layer ${activeBg === 2 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`}></div>
 
-                <div className='hdr-glow-overlay' />
-                <Vignette />
-                <ParticleBackground currentTheme={backgroundTheme} pulseLevel={pulseLevel} bpm={audioEngine.getCurrentBpm()} reducedMotion={prefersReducedMotion} />
-                <NoiseOverlay reducedMotion={prefersReducedMotion} />
-                <div className='aurora-reflect' />
-                <RadialLighting reducedMotion={prefersReducedMotion} />
+            {/* === Background Layers === */}
+{/* === Background Layers === */}
+<div
+  className={`bg-layer ${activeBg === 1 ? "opacity-100" : "opacity-0"} ${activeBackgroundClass}`}
+/>
+<div
+  className={`bg-layer ${activeBg === 2 ? "opacity-100" : "opacity-0"} ${activeBackgroundClass}`}
+/>
 
-                <AnimatePresence>
-                    {showConfetti && <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={backgroundTheme} reducedMotion={prefersReducedMotion} />}
-                    {showPowerSurge && <PowerSurgeEffect key="power-surge" onComplete={() => setShowPowerSurge(false)} reducedMotion={prefersReducedMotion} />}
-                </AnimatePresence>
-                
-                <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
-                     {renderContent()}
-                </div>
+<div className="hdr-glow-overlay" />
+<Vignette />
+<ParticleBackground
+  currentTheme={backgroundTheme}
+  pulseLevel={pulseLevel}
+  bpm={audioEngine.getCurrentBpm()}
+  reducedMotion={prefersReducedMotion}
+/>
+<NoiseOverlay reducedMotion={prefersReducedMotion} />
+<div className="aurora-reflect" />
+<RadialLighting reducedMotion={prefersReducedMotion} />
 
-                <AnimatePresence>
-                    {gameState === 'turnIntro' && ( <TurnBanner key={`turn-banner-${roundCount}`} playerName={players[currentPlayer]} /> )}
-                    {modalState.type === 'extremeIntro' && (
-                        <React.Fragment key={`modal-${modalState.type}`}>
-                            <ExtremeIntroEffect theme={backgroundTheme} reducedMotion={prefersReducedMotion}/>
-                            <ExtremeIntroModal isOpen={true} onClose={handleExtremeIntroClose} activeVisualTheme={activeVisualTheme} />
-                        </React.Fragment>
-                    )}
-                    {modalState.type === 'prompt' && <PromptModal key={`modal-${modalState.type}`} isOpen={true} onClose={handlePromptModalClose} onRefuse={handleRefuse} prompt={modalState.data} activeVisualTheme={activeVisualTheme} />}
-                    {modalState.type === 'consequence' && <ConsequenceModal key={`modal-${modalState.type}`} isOpen={true} onClose={handleConsequenceClose} text={modalState.data.text} activeVisualTheme={activeVisualTheme} />}
-                    {modalState.type === 'editor' && <EditorModal key={`modal-${modalState.type}`} isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: 'confirmReset', data: {from: 'settings'} })} activeVisualTheme={activeVisualTheme} />}
-                    {modalState.type === 'settings' && <SettingsModal key={`modal-${modalState.type}`} isOpen={true} onClose={() => setModalState({ type: null })} settings={settings} onSettingsChange={(newSettings) => setSettings(prev => ({...prev, ...newSettings}))} isMuted={isMuted} onMuteToggle={handleToggleMute} onEditPrompts={() => setModalState({ type: 'editor', data: { from: 'settings' } })} onResetPrompts={() => setModalState({ type: 'confirmReset' })} onThemeChange={handleThemeChange} currentTheme={currentTheme} userId={userId} onRestart={() => setModalState({ type: 'confirmRestart' })} onQuit={() => setModalState({ type: 'confirmQuit' })} activeVisualTheme={activeVisualTheme} reducedMotion={prefersReducedMotion} onReducedMotionToggle={() => setPrefersReducedMotion(p => !p)} />}
-                    {modalState.type === 'confirmReset' && <ConfirmModal key={`modal-${modalState.type}`} isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === 'settings' ? 'editor' : 'settings', data: { from: 'settings' } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />}
-                    {modalState.type === 'confirmRestart' && <ConfirmModal key={`modal-${modalState.type}`} isOpen={true} onClose={() => { setModalState({ type: 'settings' }); }} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />}
-                    {modalState.type === 'confirmQuit' && <ConfirmModal key={`modal-${modalState.type}`} isOpen={true} onClose={() => { setModalState({ type: 'settings' }); }} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />}
-                </AnimatePresence>
-            </MotionConfig>
-        </div>
-    );
+{/* === Global Effects === */}
+<AnimatePresence>
+  {showConfetti && (
+    <Confetti
+      key="confetti"
+      onFinish={() => setShowConfetti(false)}
+      origin={confettiOrigin}
+      theme={backgroundTheme}
+      reducedMotion={prefersReducedMotion}
+    />
+  )}
+  {showPowerSurge && (
+    <PowerSurgeEffect
+      key="power-surge"
+      onComplete={() => setShowPowerSurge(false)}
+      reducedMotion={prefersReducedMotion}
+    />
+  )}
+</AnimatePresence>
+
+{/* === Main App Content === */}
+<div
+  id="app-content"
+  aria-hidden={!!modalState.type}
+  className="w-full h-screen relative overflow-hidden"
+>
+  {renderContent()}
+</div>
+
+{/* === TURN BANNER === */}
+<AnimatePresence initial={false}>
+  {gameState === "turnIntro" && (
+    <TurnBanner
+      key={`turn-banner-${roundCount}`}
+      playerName={players[currentPlayer]}
+    />
+  )}
+</AnimatePresence>
+
+{/* === MODAL LAYER === */}
+<AnimatePresence initial={false}>
+  {modalState.type === "extremeIntro" && (
+    <>
+      <ExtremeIntroEffect
+        key={`introfx-${backgroundTheme}`}
+        theme={backgroundTheme}
+        reducedMotion={prefersReducedMotion}
+      />
+      <ExtremeIntroModal
+        isOpen={true}
+        onClose={handleExtremeIntroClose}
+        activeVisualTheme={activeVisualTheme}
+      />
+    </>
+  )}
+
+  {modalState.type === "prompt" && (
+    <PromptModal
+      key="prompt"
+      isOpen={true}
+      onClose={handlePromptModalClose}
+      onRefuse={handleRefuse}
+      prompt={modalState.data}
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+
+  {modalState.type === "consequence" && (
+    <ConsequenceModal
+      key="consequence"
+      isOpen={true}
+      onClose={handleConsequenceClose}
+      text={modalState.data.text}
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+
+  {modalState.type === "editor" && (
+    <EditorModal
+      key="editor"
+      isOpen={true}
+      onClose={handleEditorClose}
+      prompts={prompts}
+      onReset={() =>
+        setModalState({
+          type: "confirmReset",
+          data: { from: "settings" },
+        })
+      }
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+
+  {modalState.type === "settings" && (
+    <SettingsModal
+      key="settings"
+      isOpen={true}
+      onClose={() => setModalState({ type: null })}
+      settings={settings}
+      onSettingsChange={(newSettings) =>
+        setSettings((prev) => ({ ...prev, ...newSettings }))
+      }
+      isMuted={isMuted}
+      onMuteToggle={handleToggleMute}
+      onEditPrompts={() =>
+        setModalState({
+          type: "editor",
+          data: { from: "settings" },
+        })
+      }
+      onResetPrompts={() => setModalState({ type: "confirmReset" })}
+      onThemeChange={handleThemeChange}
+      currentTheme={currentTheme}
+      userId={userId}
+      onRestart={() => setModalState({ type: "confirmRestart" })}
+      onQuit={() => setModalState({ type: "confirmQuit" })}
+      activeVisualTheme={activeVisualTheme}
+      reducedMotion={prefersReducedMotion}
+      onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)}
+    />
+  )}
+
+  {modalState.type === "confirmReset" && (
+    <ConfirmModal
+      key="confirm-reset"
+      isOpen={true}
+      onClose={() => {
+        setModalState({
+          type:
+            modalState.data?.from === "settings" ? "editor" : "settings",
+          data: { from: "settings" },
+        });
+      }}
+      onConfirm={handleConfirmReset}
+      title="Confirm Reset"
+      message="Are you sure? This will replace all prompts with the defaults."
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+
+  {modalState.type === "confirmRestart" && (
+    <ConfirmModal
+      key="confirm-restart"
+      isOpen={true}
+      onClose={() => setModalState({ type: "settings" })}
+      onConfirm={handleRestartGame}
+      title="Confirm Restart"
+      message="Are you sure? This will restart the game and reset all progress."
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+
+  {modalState.type === "confirmQuit" && (
+    <ConfirmModal
+      key="confirm-quit"
+      isOpen={true}
+      onClose={() => setModalState({ type: "settings" })}
+      onConfirm={handleQuitGame}
+      title="Confirm Quit"
+      message="Are you sure you want to quit? All progress will be lost."
+      activeVisualTheme={activeVisualTheme}
+    />
+  )}
+</AnimatePresence>
+      {/* ...Turn Banner + Modal Layer (above) ... */}
+    </MotionConfig>
+  </div>
+);
 }
-
 export default App;
-
