@@ -370,6 +370,102 @@ body {
   animation-duration: 0.001s !important;
   transition-duration: 0.001s !important;
 }
+/* === CINEMATIC BACKGROUND LAYERS === */
+
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+      circle at center,
+      rgba(20, 20, 20, 0.85) 0%,
+      rgba(0, 0, 0, 1) 100%
+    ),
+    url("/textures/noise.png");
+  background-blend-mode: overlay;
+  background-size: cover;
+  z-index: 0;
+}
+
+.aurora-reflect {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    circle at 40% 40%,
+    rgba(200, 100, 255, 0.12),
+    rgba(0, 0, 0, 0)
+  ),
+  radial-gradient(circle at 60% 60%, rgba(80, 180, 255, 0.08), transparent);
+  mix-blend-mode: screen;
+  z-index: 1;
+  opacity: 0.9;
+  animation: aurora-pulse 12s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-pulse {
+  0% {
+    transform: translateY(0px) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    transform: translateY(-10px) scale(1.05);
+    filter: blur(1.5px);
+  }
+}
+
+.vignette-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+  z-index: 2;
+  pointer-events: none;
+}
+
+.noise-animated {
+  position: fixed;
+  inset: 0;
+  background-image: url("/textures/noise.png");
+  opacity: 0.04;
+  z-index: 3;
+  animation: noise-move 0.6s steps(3, end) infinite;
+  mix-blend-mode: soft-light;
+}
+
+@keyframes noise-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+.radial-light-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--light-x, 50%) var(--light-y, 50%),
+    rgba(255, 255, 200, 0.06),
+    rgba(0, 0, 0, 0)
+  );
+  mix-blend-mode: overlay;
+  z-index: 4;
+}
+
+.hdr-glow-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.05),
+    rgba(0, 0, 0, 0)
+  );
+  z-index: 5;
+}
 
 /* ==== Performance hints ==== */
 .bg-layer,
