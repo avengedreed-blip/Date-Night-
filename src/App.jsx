@@ -5,12 +5,6 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, Motio
 import * as Tone from "tone";
 if (!window.Tone) window.Tone = Tone;
 
-// External Firebase Imports (assuming they are set up in your Vite project)
-// Note: For a real Vite app, you'd use npm/yarn to install firebase
-// import { initializeApp } from 'firebase/app';
-// import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-// import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
-
 // Polyfill for structuredClone for wider browser compatibility.
 if (typeof structuredClone !== "function") {
     globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -132,28 +126,24 @@ const publicApi = {
 
       const ctx = window.Tone.getContext();
       if (ctx.rawContext) {
-        // Tone.js v14+ exposes latencyHint as read-only
         window.Tone.context.lookAhead = 0.03;
         window.Tone.Transport.lookAhead = 0.03;
-        console.log("Audio context latency hint (read-only):", ctx.rawContext.latencyHint);
       } else {
         window.Tone.context.lookAhead = 0.03;
         window.Tone.Transport.lookAhead = 0.03;
-        console.log("Audio context latency:", ctx.latencyHint);
       }
 
       createChannels();
       createSynths();
       createThemes();
       isInitialized = true;
-      console.log("Audio Engine Initialized.");
       return true; 
     } 
     catch (e) { 
       console.error("Audio Engine Init Error:", e); 
       return false; 
     }
-  }, // ✅ ends initialize() only — no extra braces here
+  },
 
   async startTheme(themeName) {
     const Tone = window.Tone;
@@ -206,6 +196,7 @@ const publicApi = {
             if (Tone.Transport.state === 'started') {
                 Tone.Transport.stop(); 
                 Tone.Transport.cancel(0);
+                Tone.Transport.seconds = 0;
             }
         },
         getCurrentBpm: () => activeTheme ? activeTheme.bpm : 85,
@@ -244,17 +235,35 @@ const publicApi = {
 // --- DATA & PROMPTS ---
 const defaultPrompts = { truthPrompts: { normal: [ "Would you remarry if your partner died?", "Do you ever regret marrying your partner?", "What's your biggest regret? Explain.", "What's your favorite thing that your partner does for you?", "What do you envision the next 50 years with your partner being like? Explain in great detail.", "Tell your partner something that they need to improve on. Go into great detail.", "What's one thing you're scared to ask me, but really want to know?", "What is a secret you've kept from your parents?", "Describe a dream you've had about me.", "If you could change one thing about our history, what would it be?", "What's the most childish thing you still do?", "What do you think is your partner's biggest strength?", "If money didn't matter, what would you want your partner to do with their life?", "What song always makes you think of your partner?", "What was your happiest childhood memory?", "What's one thing you've always wanted to tell your partner, but never have?", "What scares you most about the future with your partner?", "What's one thing you wish you and your partner could do more often?", "If you could relive one day of your relationship, which would it be?" ], spicy: [ "What's your favorite part of your partner's body?", "Describe a time they turned you on without even realizing it.", "Tell me a sexual fantasy involving us you've never shared.", "What's the most embarrassing thing that's ever happened to you during sex?", "Who's the best sexual partner you've ever had? And why?", "Name a celebrity you've had a sexual fantasy about.", "If you could only do one sex act for the rest of your life, what would it be?", "Have you ever cheated on a partner?", "Have you ever faked an orgasm with your current partner?", "Tell your partner what you're thinking about in great detail, when you're horny prior to sex.", "What's the naughtiest thought you've had about me this week?", "Rank your top three favorite positions.", "What's one thing you want me to do to you in bed more often?", "What's the sexiest dream you've ever had about your partner?", "What's the dirtiest compliment you secretly want from your partner?", "Where's the riskiest place you'd want to fool around with your partner?", "If you could make your partner wear any outfit for you, what would it be?", "What's your favorite way your partner touches you when you want it to lead to sex?", "What's a fantasy involving your partner you've never admitted out loud?", "If you could freeze time, what would you do to your partner while no one else was watching?", "What's a kink you're curious about but nervous to try with your partner?", "Which body part of your partner do you think about most when they're not around?", "What's your favorite way your partner has teased you without realizing it?" ], extreme: [ "Describe your partner's genitals in great detail.", "Which ex would you most likely allow to have a threesome with you and your partner?", "Which ex looked the best naked?", "Describe a sexual experience with an ex in great detail.", "Have you ever masturbated in an inappropriate time or place?", "What do you want to do to your partner right now? Be detailed.", "Tell your partner any ways that they can improve in bed.", "What is the biggest lie you have ever told me?", "Have you ever considered leaving me? If so, why?", "Describe the most intense orgasm you've ever had, with or without me.", "What is something you've never told anyone about your sexual history?", "Describe, in detail, your perfect sexual scenario with your partner.", "What's the nastiest thought you've ever had about your partner in public?", "If you could film yourself and your partner doing anything in bed, what would you want captured?", "What's the dirtiest porn search you've ever typed that you'd want to try with your partner?", "Which of your partner's friends have you thought about sexually (even fleetingly)?", "What's the roughest or wildest thing you secretly want your partner to do to you?", "What's your most shameful fantasy you'd never tell your partner's family?", "If you could erase one sexual experience from your past before meeting your partner, what would it be?", "What do you imagine when you masturbate that you haven't told your partner?" ] }, darePrompts: { normal: [ "Take a cute selfie with your partner.", "Give your best impression of your partner.", "Let your partner tickle you for 30 seconds.", "Give your partner a shoulder rub for 3 minutes.", "Do a somersault.", "Do 10 jumping jacks.", "Give your partner a hug, as if they were dying.", "Post a picture of your partner on social media with a loving caption.", "Let your partner draw a temporary tattoo on you with a pen.", "Serenade your partner with a love song, even if you can't sing.", "Do your best runway walk for your partner.", "Take a silly selfie right now and show your partner.", "Speak in an accent for the next 2 rounds with your partner.", "Tell your partner two truths and a lie.", "Share your screen time stats with your partner.", "Do your best dance move for your partner for 20 seconds.", "Hug a pillow and pretend it's your partner for one minute.", "Let your partner pick a silly nickname for you for the rest of the game.", "Text a random emoji to a friend and show your partner the reply.", "Sing your favorite chorus from memory to your partner.", "Pretend to be your partner for one round." ], spicy: [ "Give me a passionate kiss, as if we haven't seen each other in a month.", "Whisper what you want to do to me later tonight in my ear.", "Gently remove one item of my clothing.", "Sit in your partner's lap for 3 rounds.", "Touch your partner through their clothes until they're aroused.", "Take a sexy selfie in only your underwear and send it to your partner.", "Flash your partner a private part of your choosing.", "Explain in graphic detail how you like to masturbate.", "Give your partner a topless lap dance.", "Gently kiss your partner's naked genitals.", "Let me choose an item of your clothing for you to remove.", "Give your partner a hickey somewhere they can hide it.", "Describe how you would tease me if we were in public right now.", "Describe out loud how you'd undress your partner right now.", "Let your partner choose a body part for you to kiss.", "Show your partner how you'd seduce them in public without anyone noticing.", "Whisper something filthy in your partner's ear.", "Stroke your partner's hand or arm like you would in foreplay.", "Show your partner your sexiest facial expression.", "Bite your lip and hold eye contact with your partner for 30 seconds.", "Kiss your partner as if it were your first time.", "Moan your partner's name in a way that turns them on." ], extreme: [ "Give your partner a hand job for 3 minutes.", "Sit on your partner's face, or let them sit on your face for 3 minutes.", "Soak for 5 minutes.", "Masturbate for 5 minutes while watching porn that your partner picked.", "Edge your partner twice.", "Perform oral sex on your partner for 2 minutes.", "Use a sex toy on your partner for 3 minutes.", "Allow your partner to use any sex toy they'd like on your for the next 5 minutes.", "Wear a butt plug for the next 10 minutes.", "Let your partner tie you up for 5 minutes and do what they want.", "Roleplay a fantasy of your partner's choosing for 5 minutes.", "Take a nude photo and send it to your partner right now.", "Lick or suck on a body part your partner chooses.", "Let your partner spank you as hard as they want 5 times.", "Send your partner a dirty voice note moaning their name.", "Simulate oral sex on your fingers for 30 seconds in front of your partner.", "Strip completely naked and pose however your partner says.", "Show your partner how you masturbate, in detail.", "Act out your favorite porn scene with your partner.", "Put something of your partner's in your mouth and treat it like foreplay.", "Let your partner tie your hands for the next 3 rounds.", "Edge yourself while your partner watches for 2 minutes.", "Edge your partner while you watch for 2 minutes." ] }, triviaQuestions: { normal: [ "What is your partner's birthday?", "What is your partner's favorite show?", "What is their biggest insecurity?", "What is your partner's biggest fear?", "What is their dream job if money were no object?", "What is one thing your partner has always wanted to try but hasn't yet?", "What is the first gift you gave each other?", "What is your partner's favorite childhood cartoon?", "What is the name of your partner's first pet?", "What is your partner's favorite board game?", "Would you rather go into the past and meet your ancestors or go into the future and meet your great-great grandchildren?", "What was their favorite band in high school?", "What do they love most about themselves?", "What do they love the most about you?", "What's my favorite animal?", "If they could haunt anyone as a ghost, who would it be?", "What is their dream vacation?", "What accomplishment are they most proud of?", "What historical figure would they most want to have lunch with?", "What is their least favorite food?", "What's your partner's go-to comfort food?", "What movie does your partner always want to rewatch?", "What's your partner's biggest pet peeve?", "Which holiday does your partner love the most?", "What's your partner's dream car?", "What color does your partner secretly dislike wearing?", "Who was your partner's first celebrity crush?", "What's your partner's most annoying habit (to you)?", "If your partner could instantly master one skill, what would it be?" ] }, consequences: { normal: [ "You have to call your partner a name of their choosing for the rest of the game.", "Every wrong answer for the rest of the game gets you tickled for 20 seconds.", "Go get your partner a drink.", "Make your partner a snack.", "You have to end every sentence with 'my love' for the next 3 rounds.", "Give your partner your phone and let them send one playful text to anyone.", "Compliment your partner 5 times in a row.", "Give your partner control of the TV remote tonight.", "Swap seats with your partner for the next round.", "Tell your partner a secret you've never told them.", "Let your partner take an unflattering picture of you.", "You can only answer your partner with 'yes, my love' until your next turn.", "Wear a silly hat (or make one) until the game ends with your partner.", "Post a sweet compliment about your partner on social media." ], spicy: [ "Play the next 3 rounds topless.", "For the next 5 rounds, every time it's your turn, you have to start by kissing your partner.", "Your partner gets to give you one command, and you must obey.", "Play the next 3 rounds bottomless.", "Every wrong answer or refusal requires you to send your partner a nude picture for the rest of the game. Even your partner's wrong answers.", "Remove an article of clothing each round for the remainder of the game.", "Do ten jumping jacks completely naked.", "Swap clothes with your partner for the remainder of the game.", "Your partner gets to spank you, as hard as they want, 5 times.", "Kiss your partner somewhere unexpected.", "Tell your partner your dirtiest thought in the last 24 hours.", "For the next round, sit on your partner's lap.", "Let your partner bite or nibble a place of their choice.", "You have to let your partner mark you with lipstick or a marker.", "Show your partner your favorite sex position (with clothes on).", "Tease your partner without kissing for 1 minute.", "Send your partner a sexy text right now while sitting next to them.", "Give your partner a 1-minute lap dance." ], extreme: [ "Wear a butt plug for the remainder of the game.", "Record yourself masturbating right now and send it to your partner.", "Use a sex toy of your partner's choosing for the remainder of the game.", "Edge yourself for the remainder of the game.", "Allow your partner to act out a fantasy of theirs, and you can't say no.", "You must perform any sexual act your partner demands, right now.", "Send your partner the filthiest nude you've ever taken.", "Use your tongue on any body part your partner picks.", "Strip completely and stay that way until the round ends with your partner.", "Let your partner spank or choke you until they're satisfied.", "Put on a show of how you like to be touched for your partner.", "Allow your partner to record 30 seconds of you doing something sexual.", "Play with a toy in front of your partner right now.", "Moan out loud for 1 minute straight for your partner.", "Let your partner pick your sexual punishment and don't complain." ] } };
 
-// Mock hook for previewing without Firebase
-// In a real Vite app, you would import the actual hook
 const useFirestorePrompts = () => {
-    const [prompts, setPrompts] = useState(defaultPrompts);
-    const updatePrompts = (newPrompts) => {
-        setPrompts(newPrompts);
-    };
-    return { prompts, updatePrompts, isLoading: false, userId: 'preview-user-123' };
+  const [prompts, setPrompts] = useState(() => {
+    try {
+      const stored = localStorage.getItem("prompts");
+      return stored ? JSON.parse(stored) : defaultPrompts;
+    } catch {
+      return defaultPrompts;
+    }
+  });
+
+  const updatePrompts = (newPrompts) => {
+    setPrompts(newPrompts);
+    localStorage.setItem("prompts", JSON.stringify(newPrompts));
+  };
+
+  const resetPrompts = () => {
+    setPrompts(defaultPrompts);
+    localStorage.setItem("prompts", JSON.stringify(defaultPrompts));
+  };
+
+  return {
+    prompts,
+    updatePrompts,
+    resetPrompts,
+    userId: "local",
+    isLoading: false,
+  };
 };
 
-// --- ENHANCEMENT: Parallax Hook ---
 const useParallax = (strength = 10) => {
     const ref = useRef(null);
     const x = useMotionValue(0);
@@ -308,7 +317,6 @@ const useParallax = (strength = 10) => {
     return { ref, style: { rotateX, rotateY, transformStyle: "preserve-3d" } };
 };
 
-// --- UI COMPONENTS ---
 const CloseIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
 const SettingsIcon = React.memo(() => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12c0 .36.05.7.14 1.03.22.84.97 1.34 1.77 1.34h.09a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"></path></svg>));
 const SpeakerIcon = React.memo(({ muted }) => ( muted ? (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="22" y1="9" x2="16" y2="15"></line><line x1="16" y1="9" x2="22" y2="15"></line></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>) ));
@@ -325,16 +333,19 @@ const hexToRgb = (hex) => {
     } : null;
 };
 
-// --- ENHANCEMENT: Theme-specific particles ---
-const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedMotion }) => {
+const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedMotion, style }) => {
     const canvasRef = useRef(null);
     const animationFrameId = useRef(null);
 
     useEffect(() => {
         const canvas = canvasRef.current; if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         let width, height, particles = [];
         let isHidden = document.hidden;
+
+        canvas.style.position = 'fixed';
+        canvas.style.inset = '0';
 
         const handleVisibilityChange = () => {
             isHidden = document.hidden;
@@ -356,8 +367,10 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
         const activeConfig = themeConfig[currentTheme] || themeConfig.velourNights;
         
         const drawStatic = () => {
+            const ratio = Math.min(window.devicePixelRatio || 1, 2);
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
             ctx.clearRect(0, 0, width, height);
-            const staticConfig = themeConfig[currentTheme] || themeConfig.starlitAbyss; // Default to stars
+            const staticConfig = themeConfig[currentTheme] || themeConfig.starlitAbyss;
             const numStaticStars = staticConfig.num / 3;
             for (let i = 0; i < numStaticStars; i++) {
                 const color = staticConfig.palette[Math.floor(Math.random() * staticConfig.palette.length)];
@@ -372,15 +385,26 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
             }
             ctx.globalAlpha = 1;
         };
-
-        const resizeCanvas = () => { 
-            width = canvas.width = canvas.offsetWidth; 
-            height = canvas.height = canvas.offsetHeight; 
-            if (reducedMotion) {
-                drawStatic();
-            } else {
-                createParticles();
+        
+        const createParticles = () => {
+            particles = [];
+            for (let i = 0; i < activeConfig.num; i++) {
+                particles.push(new Particle(i));
             }
+        };
+
+        const resizeCanvas = () => {
+            const ratio = Math.min(window.devicePixelRatio || 1, 2);
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            canvas.width = Math.max(1, Math.floor(w * ratio));
+            canvas.height = Math.max(1, Math.floor(h * ratio));
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            width = w; 
+            height = h;
+            if (reducedMotion) drawStatic(); else createParticles();
         };
 
         if (reducedMotion) {
@@ -414,24 +438,24 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
                 switch(this.type) {
                     case 'star':
                         this.radius = Math.random() * (this.layer > 0.6 ? 1.2 : 0.7) + 0.1;
-                        this.speedX = (Math.random() - 0.5) * 0.05 * this.layer * speedMultiplier;
-                        this.speedY = (Math.random() - 0.5) * 0.05 * this.layer * speedMultiplier;
+                        this.speedX = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * 0.05 * this.layer * speedMultiplier));
+                        this.speedY = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * 0.05 * this.layer * speedMultiplier));
                         this.shadowBlur = this.radius * 3 + (intensity * 3);
                         this.baseAlpha = 0.2 + this.layer * 0.8;
                         break;
                     case 'ember':
                     case 'spark':
                         this.radius = Math.random() * 1.5 + 0.5;
-                        this.speedX = (Math.random() - 0.5) * (0.1 + intensity * 0.3) * speedMultiplier;
-                        this.speedY = -Math.random() * (0.3 + intensity * 0.7) * speedMultiplier;
+                        this.speedX = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * (0.1 + intensity * 0.3) * speedMultiplier));
+                        this.speedY = Math.max(-0.5, Math.min(0.5, -Math.random() * (0.3 + intensity * 0.7) * speedMultiplier));
                         this.shadowBlur = this.radius * 4 + (intensity * 4);
                         this.baseAlpha = Math.random() * 0.5 + 0.2;
                         this.life = Math.random() * 50 + 50;
                         break;
                     default: // mote, confetti
                         this.radius = Math.random() * (this.type === 'confetti' ? 2.5 : 1.5) + 0.5;
-                        this.speedX = (Math.random() - 0.5) * (0.2 + intensity * 0.4) * speedMultiplier;
-                        this.speedY = (Math.random() - 0.5) * (0.2 + intensity * 0.4) * speedMultiplier;
+                        this.speedX = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * (0.2 + intensity * 0.4) * speedMultiplier));
+                        this.speedY = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * (0.2 + intensity * 0.4) * speedMultiplier));
                         this.shadowBlur = this.radius * 2;
                         this.baseAlpha = Math.random() * 0.6 + 0.1;
                 }
@@ -457,10 +481,7 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
                 }
             }
 
-            draw(frameCount) { 
-                if (Math.random() < 0.1) ctx.filter = 'blur(1px)'; 
-                else ctx.filter = 'none';
-
+            draw(frameCount) {
                 const beatDuration = 60 / bpm;
                 const bpmFactor = Math.max(0.8, Math.min(1.4, 1 / beatDuration));
                 const twinkleSpeed = (0.005 + (this.index % 10) * 0.001) * bpmFactor;
@@ -483,24 +504,16 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
                 
                 ctx.fillStyle = color;
                 ctx.fill();
-                ctx.filter = 'none';
             }
         }
         
-        const createParticles = () => {
-            particles = [];
-            for (let i = 0; i < activeConfig.num; i++) {
-                particles.push(new Particle(i));
-            }
-        };
-
         let frameCount = 0;
         const animate = () => { 
             if (isHidden || !canvasRef.current || reducedMotion) {
                 animationFrameId.current = null;
                 return;
             }
-            ctx.clearRect(0, 0, width, height); 
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
             particles.forEach(p => { p.update(); p.draw(frameCount); }); 
             frameCount++;
             animationFrameId.current = requestAnimationFrame(animate); 
@@ -521,7 +534,7 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
         };
     }, [currentTheme, pulseLevel, bpm, reducedMotion]);
 
-    return <canvas ref={canvasRef} className="fixed inset-0 w-full h-full opacity-100 z-[40] pointer-events-none"></canvas>;
+    return <canvas ref={canvasRef} className="particle-canvas" style={style}></canvas>;
 });
 
 const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
@@ -540,6 +553,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
         const canvas = canvasRef.current; if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         
         const resizeConfetti = () => {
@@ -622,7 +636,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
         return () => {
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             window.removeEventListener('resize', resizeConfetti);
-            particles.length = 0; // Clear particles array to prevent memory leaks
+            particles.length = 0;
         };
     }, [onFinish, theme, reducedMotion]);
 
@@ -630,18 +644,22 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 };
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
-// Physical offset of the pointer graphic in degrees, clockwise.
-const POINTER_OFFSET = 7;
+
+const getPointerOffsetFromCss = () => {
+    const el = document.getElementById('app-container') || document.documentElement;
+    const val = getComputedStyle(el).getPropertyValue('--pointer-tilt') || '0deg';
+    const n = parseFloat(val);
+    return Number.isFinite(n) ? n : 0;
+};
 
 const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion }) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
-    const canvasRef = useRef(null);
+    const wheelCanvasRef = useRef(null);
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
-    const parallax = useParallax(5);
 
     useEffect(() => () => {
         if (animationFrameRef.current) {
@@ -652,8 +670,8 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
 
     useEffect(() => {
         const handler = setTimeout(() => {
-            if (reducedMotion && canvasRef.current && !spinLock.current) {
-                canvasRef.current.style.transform = 'none';
+            if (reducedMotion && wheelCanvasRef.current && !spinLock.current) {
+                wheelCanvasRef.current.style.transform = 'none';
             }
         }, 100);
 
@@ -661,6 +679,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     }, [reducedMotion]);
 
     const drawWheel = useMemo(() => (ctx, size) => {
+        if (!ctx) return;
         const center = size / 2;
         const radius = Math.max(0, center - 25);
         const hubRadius = size / 10;
@@ -741,7 +760,9 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         const rimWidth = 8;
         ctx.strokeStyle = rimColors.low;
         ctx.lineWidth = rimWidth + 2;
-        ctx.shadowColor = getComputedStyle(document.body).getPropertyValue('--theme-highlight').trim() || '#FFD700';
+        const host = document.getElementById('app-container') || document.documentElement;
+        const themeHighlight = getComputedStyle(host).getPropertyValue('--theme-highlight').trim() || '#FFD700';
+        ctx.shadowColor = themeHighlight;
         ctx.shadowBlur = 15;
         ctx.beginPath();
         if (radius > 0) ctx.arc(center, center, radius + rimWidth / 2, 0, 2 * Math.PI);
@@ -777,7 +798,8 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             ctx.save();
             ctx.translate(center, center);
             ctx.rotate(textAngle);
-            ctx.font = `800 ${size / 15}px 'Inter', sans-serif`;
+            const fontSize = Math.max(20, size / 13);
+            ctx.font = `800 ${fontSize}px 'Inter', sans-serif`;
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -788,31 +810,18 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             ctx.restore();
         });
 
-        /*
-        // Optional Debug Overlay: Uncomment to see the pointer's logical angle.
-        ctx.save();
-        ctx.translate(center, center);
-        ctx.rotate((270 + POINTER_OFFSET) * Math.PI / 180); // Rotate to the pointer's logical position
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -radius);
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-        */
-
     }, [currentTheme]);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
+        const canvas = wheelCanvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         const container = canvas.parentElement;
 
         let resizeHandle;
         const resizeCanvas = () => {
-             if (spinLock.current) return; // Prevent redraw mid-spin
+             if (spinLock.current) return;
             const size = Math.max(280, Math.min(container.offsetWidth, container.offsetHeight, 480));
             const ratio = Math.min(window.devicePixelRatio || 1, 2);
             const needsResize = canvas.width !== size * ratio || canvas.height !== size * ratio;
@@ -838,18 +847,17 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     }, [drawWheel]);
     
     const finalizeSpin = useCallback(() => {
-      const rotation = rotationRef.current % 360;
-      const sliceAngle = 360 / CATEGORIES.length;
-    
-      // Correct rotation relative to pointer's true top position
-      const correctedRotation = (rotation + POINTER_OFFSET) % 360;
-    
-      // Pointer is at 0° (top), no +90 offset
-      const effectiveAngle = (360 - correctedRotation) % 360;
-    
-      const sliceIndex = Math.floor(effectiveAngle / sliceAngle);
-      const winner = CATEGORIES[sliceIndex % CATEGORIES.length].toLowerCase();
-      onSpinFinish(winner);
+        const rotation = rotationRef.current % 360;
+        const sliceAngle = 360 / CATEGORIES.length;
+        // Align logical rotation direction with the canvas drawing arc
+        const correctedRotation = (rotation + getPointerOffsetFromCss()) % 360;
+        // Apply half-slice phase shift for perfect pointer centering
+        const effectiveAngle = (correctedRotation + sliceAngle / 2) % 360;
+        // Compute correct slice index
+        const sliceIndex = Math.floor(effectiveAngle / sliceAngle);
+        // Normalize the winner
+        const winner = CATEGORIES[sliceIndex % CATEGORIES.length].toLowerCase();
+        onSpinFinish(winner);
     }, [onSpinFinish]);
 
     const handleSpin = useCallback(() => {
@@ -859,6 +867,8 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         }
         lastSpinTimeRef.current = now;
 
+        if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
+
         requestAnimationFrame(() => {
             if (spinLock.current) return;
             spinLock.current = true;
@@ -867,7 +877,6 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             setIsSpinInProgress(true);
             playWheelSpinStart();
 
-            // Failsafe to unlock spin button if animation hangs for any reason
             const failsafeTimer = setTimeout(() => {
                 if (spinLock.current) {
                     console.warn('Failsafe spin reset triggered.');
@@ -888,9 +897,9 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                 const targetAngle = startAngle + spinDegrees;
                 
                 rotationRef.current = targetAngle;
-                if (canvasRef.current) {
-                    canvasRef.current.style.transition = 'transform 0.5s ease-out';
-                    canvasRef.current.style.transform = `rotate(${targetAngle}deg)`;
+                if (wheelCanvasRef.current) {
+                    wheelCanvasRef.current.style.transition = 'transform 0.5s ease-out';
+                    wheelCanvasRef.current.style.transform = `rotate(${targetAngle}deg)`;
                 }
 
                 playWheelTick();
@@ -905,13 +914,12 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                         setIsSpinning(false);
                         setIsSpinInProgress(false);
                         spinLock.current = false;
-                        if(canvasRef.current) canvasRef.current.style.transition = '';
+                        if(wheelCanvasRef.current) wheelCanvasRef.current.style.transition = '';
                     }, 500);
                 }, 500);
                 return;
             }
 
-            // Full Animation Logic
             const rand = Math.random();
             const duration = 4500 + rand * 1000;
             const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
@@ -922,20 +930,19 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             let lastTickAngle = startAngle;
 
             const animate = (now) => {
+                if (!wheelCanvasRef.current) {
+                    clearTimeout(failsafeTimer);
+                    animationFrameRef.current = null;
+                    spinLock.current = false;
+                    return;
+                }
+
                 const elapsed = now - start;
                 const t = Math.min(elapsed / duration, 1);
                 const eased = easeOutCubic(t);
                 const currentAngle = startAngle + eased * spinDegrees;
                 
-                if (canvasRef.current) {
-                    try {
-                        canvasRef.current.style.transform = `rotate(${currentAngle}deg)`;
-                    } finally {
-                         if (t >= 1) {
-                            canvasRef.current.style.transition = '';
-                         }
-                    }
-                }
+                wheelCanvasRef.current.style.transform = `rotate(${currentAngle}deg)`;
 
                 const TICK_DEGREES = 360 / CATEGORIES.length / 2;
                 if (currentAngle - lastTickAngle >= TICK_DEGREES) {
@@ -961,142 +968,74 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     }, [canSpin, setIsSpinInProgress, playWheelSpinStart, playWheelTick, playWheelStop, finalizeSpin, reducedMotion]);
 
     return (
-        <motion.div ref={parallax.ref} style={parallax.style} className="wheel-container">
-             <motion.div 
-                className="pointer"
-                animate={isPointerSettling ? "settle" : "rest"}
-                variants={{
-                    rest: { rotate: 0 },
-                    settle: { rotate: [0, -3, 2.5, -1.5, 0.5, 0] }
-                }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                onAnimationComplete={() => setIsPointerSettling(false)}
-            >
-                <div className="pointer-tip-outer">
-                    <div className="pointer-tip-inner"></div>
-                </div>
-            </motion.div>
-            <canvas
-                ref={canvasRef}
-                className="wheel-canvas"
-            />
-            <div className="hub">
-                <button 
-                    aria-label="Spin the wheel" 
-                    onClick={handleSpin} 
-                    disabled={isSpinning || !canSpin} 
-                    className="btn btn--primary spin-button"
+        <div className="wheel-container" role="img" aria-label="Game wheel">
+            <canvas ref={wheelCanvasRef} className="wheel-canvas"></canvas>
+            <div className="pointer">
+                <motion.div
+                    className="pointer-anim"
+                    animate={isPointerSettling ? 'settle' : 'rest'}
+                    variants={{
+                        rest: { rotate: 0 },
+                        settle: { rotate: [0, -3, 2.5, -1.5, 0.5, 0] },
+                    }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    onAnimationComplete={() => setIsPointerSettling(false)}
                 >
-                    <div className="spin-button-text">{isSpinning ? <SpinLoader /> : 'SPIN'}</div>
-                </button>
+                    <div className="pointer-tip-outer">
+                        <div className="pointer-tip-inner" />
+                    </div>
+                </motion.div>
             </div>
-            <div className="wheel-shimmer"></div>
-        </motion.div>
+            <div className="spin-button-wrapper">
+                <motion.button
+                    aria-label="Spin"
+                    className="spin-button"
+                    onClick={handleSpin}
+                    disabled={isSpinning || !canSpin}
+                    whileTap={{ scale: 0.95 }}
+                >
+                    {isSpinning ? <SpinLoader /> : 'SPIN'}
+                </motion.button>
+            </div>
+        </div>
     );
 });
 
-const PulseMeter = ({ level, bpm }) => {
-    const [showRipple, setShowRipple] = useState(false);
-    const levelRef = useRef(level);
-    const progress = useMotionValue(0);
-    const smoothWidth = useSpring(progress, { stiffness: 100, damping: 20 });
-    const width = useTransform(smoothWidth, v => `${v}%`);
-
-    useEffect(() => {
-        progress.set(Number(level));
-    }, [level, progress]);
-
-    useEffect(() => {
-        if (level >= 100 && levelRef.current < 100) {
-            setShowRipple(true);
-        }
-        levelRef.current = level;
-    }, [level]);
-
-    useEffect(() => () => setShowRipple(false), []);
-
+const PulseMeter = ({ level }) => {
     return (
-        <div>
-            <span id='pulse-label' className='sr-only'>Pulse Meter</span>
-            <div className='pulse-meter-container' role='meter' aria-labelledby='pulse-label' aria-valuenow={level} aria-valuemin='0' aria-valuemax='100'>
-                <motion.div
-                    className='pulse-meter-fill'
-                    style={{
-                        width,
-                        '--beat-duration': `${(60 / bpm) * 2}s`,
-                        '--wave-duration': `${120 / bpm}s`
-                    }}
-                >
-                    <div className='pulse-meter-gloss' />
-                    <div className='pulse-meter-wave' />
-                </motion.div>
-                {level >= 90 && <div className='pulse-meter-outer-glow' style={{ opacity: Math.min((level - 90) / 10, 1), '--beat-duration': `${(60 / bpm) * 2}s` }}/>}
-                <AnimatePresence>
-                    {showRipple && (
-                        <motion.div
-                            className='pulse-meter-ripple'
-                            initial={{ scale: 0, opacity: 0.7 }}
-                            animate={{ scale: 1.5, opacity: 0 }}
-                            transition={{ duration: 0.8 }}
-                            onAnimationComplete={() => setShowRipple(false)}
-                        />
-                    )}
-                </AnimatePresence>
-            </div>
+        <div className="pulse-meter">
+            <div className="pulse-meter__fill" style={{ width: `${level}%` }}/>
+            <div className="pulse-meter__wave" />
+            <div className="pulse-meter__gloss" />
         </div>
     );
 };
 
-
-// --- Modal (drop-in) ---
-const Modal = ({
-  isOpen,
-  onClose,
-  title,
-  children,
-  activeVisualTheme,
-  customClasses = "",
-}) => {
+// --- MODAL & OVERLAY COMPONENTS (Re-implemented) ---
+const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClasses = "" }) => {
   const parallax = useParallax(8);
   const visible = !!isOpen;
 
   React.useEffect(() => {
     if (!visible) return;
-
     const prevActive = document.activeElement;
     const focusTimer = setTimeout(() => {
       const root = parallax.ref.current;
-      const first = root?.querySelector(
-        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
-      );
+      const first = root?.querySelector('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
       (first ?? root)?.focus?.();
     }, 0);
 
     const onKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onClose?.();
-        return;
-      }
+      if (e.key === "Escape") { onClose?.(); return; }
       if (e.key === "Tab" && parallax.ref.current) {
-        const nodes = Array.from(
-          parallax.ref.current.querySelectorAll(
-            'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
-          )
-        );
+        const nodes = Array.from(parallax.ref.current.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'));
         if (!nodes.length) return;
         const first = nodes[0];
         const last = nodes[nodes.length - 1];
-
         if (e.shiftKey) {
-          if (document.activeElement === first) {
-            last.focus();
-            e.preventDefault();
-          }
+          if (document.activeElement === first) { last.focus(); e.preventDefault(); }
         } else {
-          if (document.activeElement === last) {
-            first.focus();
-            e.preventDefault();
-          }
+          if (document.activeElement === last) { first.focus(); e.preventDefault(); }
         }
       }
     };
@@ -1109,101 +1048,375 @@ const Modal = ({
     };
   }, [visible, onClose, parallax.ref]);
 
-  // Render nothing when closed
   if (!visible) return null;
 
   return (
-    <AnimatePresence>
+    <motion.div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+      onClick={onClose}
+      initial={{ backgroundColor: "rgba(0,0,0,0)" }}
+      animate={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      exit={{ backgroundColor: "rgba(0,0,0,0)" }}
+    >
       <motion.div
-        className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-        onClick={onClose}
-        initial={{ backgroundColor: "rgba(0,0,0,0)" }}
-        animate={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-        exit={{ backgroundColor: "rgba(0,0,0,0)" }}
+        ref={parallax.ref}
+        style={parallax.style}
+        tabIndex={-1}
+        className={`relative outline-none w-full max-w-sm flex flex-col modal-metallic ${activeVisualTheme?.themeClass ?? ""} ${customClasses}`}
+        onClick={(e) => e.stopPropagation()}
+        initial={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
+        animate={{ scale: 1, opacity: 1, y: 0, filter: "blur(0px)" }}
+        exit={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
+        transition={{ type: "tween", duration: 0.25 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
       >
-        <motion.div
-          ref={parallax.ref}
-          style={parallax.style}
-          tabIndex={-1}
-          className={`relative outline-none w-full max-w-sm flex flex-col modal-metallic ${
-            activeVisualTheme?.themeClass ?? ""
-          } ${customClasses}`}
-          onClick={(e) => e.stopPropagation()}
-          initial={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
-          animate={{ scale: 1, opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
-          transition={{ type: "tween", duration: 0.25 }} // avoids negative blur warnings
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title"
-        >
-          <div className="modal-header">
-            {title && (
-              <h2 id="modal-title" className="modal-title text-3xl text-white">
-                {title}
-              </h2>
-            )}
-            <motion.button
-              aria-label="Close modal"
-              onClick={onClose}
-              className="modal-close-button text-white/70 hover:text-white"
-              whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.1 }}
-            >
-              <CloseIcon />
-            </motion.button>
-          </div>
-
-          <div className="modal-body">{children}</div>
-        </motion.div>
+        <div className="modal-header">
+          {title && <h2 id="modal-title" className="modal-title text-3xl text-white">{title}</h2>}
+          <motion.button aria-label="Close modal" onClick={onClose} className="modal-close-button text-white/70 hover:text-white" whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.1 }}>
+            <CloseIcon />
+          </motion.button>
+        </div>
+        <div className="modal-body">{children}</div>
       </motion.div>
-    </AnimatePresence>
+    </motion.div>
   );
+};
+const Vignette = () => <div className="fixed inset-0 z-10 pointer-events-none vignette-overlay" />;
+const NoiseOverlay = ({ reducedMotion }) => <div className={`fixed inset-0 z-10 pointer-events-none opacity-[0.04] ${reducedMotion ? '' : 'noise-animated'}`} />;
+const RadialLighting = ({ reducedMotion }) => {
+    const lightX = useMotionValue('-100%');
+    const lightY = useMotionValue('-100%');
+    useEffect(() => {
+        if (reducedMotion) return;
+        const handleMouseMove = (e) => {
+            lightX.set(`${e.clientX}px`);
+            lightY.set(`${e.clientY}px`);
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, [lightX, lightY, reducedMotion]);
+    return <motion.div className="radial-light-overlay" style={{ '--light-x': lightX, '--light-y': lightY }} />;
+};
+const PowerSurgeEffect = ({ onComplete, reducedMotion }) => (
+    <motion.div
+        className="fixed inset-0 z-[130] pointer-events-none bg-power-surge"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 3, opacity: [0, 1, 0] }}
+        transition={{ duration: reducedMotion ? 0.1 : 1.5, ease: "easeInOut" }}
+        onAnimationComplete={onComplete}
+    />
+);
+
+const ExtremeIntroEffect = ({ theme, reducedMotion }) => (
+    <motion.div
+        className={`fixed inset-0 z-[125] pointer-events-none extreme-effect-bg ${theme}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.5 }}
+    >
+        {!reducedMotion && <div className="extreme-scanlines" />}
+    </motion.div>
+);
+const OnboardingScreen = ({ children, activeVisualTheme }) => <div className={`w-full h-full flex flex-col items-center justify-center p-8 text-center ${activeVisualTheme.themeClass}`}>{children}</div>;
+const AudioUnlockScreen = ({ onUnlock, disabled, activeVisualTheme }) => (
+    <div className="start-screen">
+      <OnboardingScreen activeVisualTheme={activeVisualTheme}>
+          <h1 className="text-8xl font-['Great_Vibes']" style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>Pulse</h1>
+          <p className="text-xl mt-4 text-white/80 max-w-xs">The intimate couples game. <br/>Best with sound on.</p>
+          <motion.button onClick={onUnlock} disabled={disabled} className="btn btn--primary mt-12 text-2xl px-12 py-5 begin-button" whileTap={{ scale: 0.95 }}>
+              {disabled ? <SpinLoader /> : "Begin"}
+          </motion.button>
+      </OnboardingScreen>
+    </div>
+);
+const OnboardingIntro = ({ onNext, activeVisualTheme }) => (
+    <OnboardingScreen activeVisualTheme={activeVisualTheme}>
+        <h2 className="text-4xl font-bold">Welcome to Pulse</h2>
+        <p className="text-lg mt-4 text-white/70 max-w-sm">Get ready to connect on a deeper level. Answer truths, complete dares, and see how well you really know each other.</p>
+        <motion.button onClick={onNext} className="btn btn--primary text-xl px-10 py-4 mt-10" whileTap={{ scale: 0.95 }}>Continue</motion.button>
+    </OnboardingScreen>
+);
+const OnboardingVibePicker = ({ onVibeSelect, currentTheme, activeVisualTheme }) => {
+    const themes = [
+        { id: 'velourNights', name: 'Velour Nights', colors: ['#F777B6', '#FFD700', '#6A0DAD'] },
+        { id: 'lotusDreamscape', name: 'Lotus Dreamscape', colors: ['#6A5ACD', '#FFFFFF', '#ADD8E6'] },
+        { id: 'velvetCarnival', name: 'Velvet Carnival', colors: ['#FFD700', '#FF4500', '#9B111E'] },
+        { id: 'starlitAbyss', name: 'Starlit Abyss', colors: ['#FFFFFF', '#E6E6FA', '#483D8B'] },
+    ];
+    return (
+        <OnboardingScreen activeVisualTheme={activeVisualTheme}>
+            <h2 className="text-4xl font-bold">Choose Your Vibe</h2>
+            <p className="text-lg mt-2 text-white/70">Set the mood for your night.</p>
+            <div className="flex flex-col gap-4 mt-8 w-full max-w-xs">
+                {themes.map(theme => (
+                    <motion.div key={theme.id} onClick={() => onVibeSelect(theme.id)} className="theme-swatch" whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.03 }}>
+                        <div className="theme-chips">{theme.colors.map(c => <div key={c} className="theme-chip" style={{ backgroundColor: c }} />)}</div>
+                        <span className="font-bold text-lg">{theme.name}</span>
+                    </motion.div>
+                ))}
+            </div>
+        </OnboardingScreen>
+    );
+};
+const PlayerNameScreen = ({ onStart, activeVisualTheme }) => {
+    const [p1, setP1] = useState('');
+    const [p2, setP2] = useState('');
+    return (
+        <OnboardingScreen activeVisualTheme={activeVisualTheme}>
+            <h2 className="text-4xl font-bold">Who's Playing?</h2>
+            <form onSubmit={(e) => { e.preventDefault(); onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
+                <div className="metallic-input-wrapper"><input type="text" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="Player 1 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/></div>
+                <div className="metallic-input-wrapper"><input type="text" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="Player 2 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/></div>
+                <motion.button type="submit" className="btn btn--primary text-xl px-10 py-4 mt-4" whileTap={{ scale: 0.95 }}>Start Game</motion.button>
+            </form>
+        </OnboardingScreen>
+    );
+};
+const ExtremeIntroModal = ({ isOpen, onClose, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onClose} activeVisualTheme={activeVisualTheme}>
+        <div className="text-center">
+            <h2 className="text-5xl font-black text-[var(--theme-highlight)] uppercase tracking-wider" style={{ WebkitTextStroke: '1px black' }}>EXTREME</h2>
+            <p className="text-2xl font-bold mt-2 text-white">The game is heating up!</p>
+            <p className="mt-4 text-white/80">The prompts are about to get much more intense. Are you ready?</p>
+            <motion.button onClick={onClose} className="btn btn--danger text-xl w-full mt-8" whileTap={{ scale: 0.95 }}>Let's Do It</motion.button>
+        </div>
+    </Modal>
+);
+const PromptModal = ({ isOpen, onClose, onRefuse, prompt, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title={prompt.title} activeVisualTheme={activeVisualTheme}>
+        <div className="text-center flex flex-col gap-6">
+            <p className="text-2xl font-semibold leading-relaxed text-white">{prompt.text}</p>
+            <div className="flex gap-4">
+                <motion.button onClick={onClose} className="btn btn--primary flex-1" whileTap={{ scale: 0.95 }}>Done</motion.button>
+                <motion.button onClick={onRefuse} className="btn btn--secondary flex-1" whileTap={{ scale: 0.95 }}>Refuse</motion.button>
+            </div>
+        </div>
+    </Modal>
+);
+const ConsequenceModal = ({ isOpen, onClose, text, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title="Consequence" activeVisualTheme={activeVisualTheme}>
+        <div className="text-center flex flex-col gap-6">
+            <p className="text-2xl font-semibold leading-relaxed text-white">{text}</p>
+            <motion.button onClick={onClose} className="btn btn--danger w-full" whileTap={{ scale: 0.95 }}>Accept Fate</motion.button>
+        </div>
+    </Modal>
+);
+const EditorModal = ({ isOpen, onClose, prompts: initialPrompts, onReset, activeVisualTheme }) => {
+    const [prompts, setPrompts] = useState(() => structuredClone(initialPrompts));
+    const handleSave = () => onClose(prompts);
+    const scrollRef = useRef(null);
+    const [isAtTop, setIsAtTop] = useState(true);
+    const [isAtBottom, setIsAtBottom] = useState(false);
+    
+    const handleScroll = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        setIsAtTop(el.scrollTop <= 0);
+        setIsAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
+    }, []);
+
+    useEffect(() => { handleScroll(); }, [handleScroll]);
+
+    const handleChange = (category, type, index, value) => {
+        const newPrompts = structuredClone(prompts);
+        newPrompts[category][type][index] = value;
+        setPrompts(newPrompts);
+    };
+    const handleRemove = (category, type, index) => {
+        const newPrompts = structuredClone(prompts);
+        newPrompts[category][type].splice(index, 1);
+        setPrompts(newPrompts);
+    };
+    const handleAdd = (category, type) => {
+        const newPrompts = structuredClone(prompts);
+        newPrompts[category][type].push("");
+        setPrompts(newPrompts);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={handleSave} title="Edit Prompts" activeVisualTheme={activeVisualTheme} customClasses="max-w-lg">
+            <div className="flex flex-col gap-4 text-white">
+                <div ref={scrollRef} onScroll={handleScroll} className="editor-scroll-area pr-2" data-at-top={isAtTop} data-at-bottom={isAtBottom}>
+                {Object.entries(prompts).map(([category, types]) => (
+                    <div key={category} className="mb-6">
+                        <h3 className="text-2xl font-bold capitalize mb-3 text-[var(--theme-highlight)]">{category.replace(/([A-Z])/g, ' $1').trim()}</h3>
+                        {Object.entries(types).map(([type, list]) => (
+                            <div key={type} className="mb-4 pl-4 border-l-2 border-white/10">
+                                <h4 className="font-semibold capitalize text-white/80 mb-2">{type}</h4>
+                                {list.map((prompt, i) => (
+                                    <div key={i} className="flex items-center gap-2 mb-2">
+                                        <input type="text" value={prompt} onChange={(e) => handleChange(category, type, i, e.target.value)} className="w-full bg-black/20 rounded-md p-2 border border-white/20 focus:border-[var(--theme-highlight)] focus:ring-0" />
+                                        <motion.button onClick={() => handleRemove(category, type, i)} whileTap={{scale:0.9}}><TrashIcon /></motion.button>
+                                    </div>
+                                ))}
+                                <button onClick={() => handleAdd(category, type)} className="btn--inline text-sm">+ Add</button>
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                </div>
+                 <div className="flex justify-between items-center pt-4 border-t border-white/10">
+                    <button onClick={onReset} className="btn--inline text-sm text-red-400 border-red-400/50 hover:bg-red-500/10">Reset All to Default</button>
+                    <motion.button onClick={handleSave} className="btn btn--primary" whileTap={{ scale: 0.95 }}>Save & Close</motion.button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, onMuteToggle, onEditPrompts, currentTheme, onThemeChange, userId, onRestart, onQuit, activeVisualTheme, reducedMotion, onReducedMotionToggle }) => {
+    const themes = [
+        { id: 'velourNights', name: 'Velour Nights', colors: ['#F777B6', '#FFD700', '#6A0DAD'] },
+        { id: 'lotusDreamscape', name: 'Lotus Dreamscape', colors: ['#6A5ACD', '#FFFFFF', '#ADD8E6'] },
+        { id: 'velvetCarnival', name: 'Velvet Carnival', colors: ['#FFD700', '#FF4500', '#9B111E'] },
+        { id: 'starlitAbyss', name: 'Starlit Abyss', colors: ['#FFFFFF', '#E6E6FA', '#483D8B'] },
+    ];
+    return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Settings" activeVisualTheme={activeVisualTheme}>
+        <div className="flex flex-col gap-6 text-white">
+            <div className="settings-section">
+                <h3 className="text-xl font-bold mb-3 text-[var(--theme-label)]">Audio</h3>
+                <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="master-vol">Master</label>
+                    <button onClick={onMuteToggle}><SpeakerIcon muted={isMuted} /></button>
+                </div>
+                <input id="master-vol" type="range" min="0" max="100" value={settings.masterVolume} onChange={e => onSettingsChange({ masterVolume: +e.target.value })} className="w-full"/>
+                <label htmlFor="music-vol" className="mt-2 block">Music</label>
+                <input id="music-vol" type="range" min="0" max="100" value={settings.musicVolume} onChange={e => onSettingsChange({ musicVolume: +e.target.value })} className="w-full"/>
+                <label htmlFor="sfx-vol" className="mt-2 block">SFX</label>
+                <input id="sfx-vol" type="range" min="0" max="100" value={settings.sfxVolume} onChange={e => onSettingsChange({ sfxVolume: +e.target.value })} className="w-full"/>
+            </div>
+            <div className="settings-section">
+                <h3 className="text-xl font-bold mb-3 text-[var(--theme-label)]">Vibe</h3>
+                <div className="flex flex-col gap-2">
+                {themes.map(theme => (
+                    <div key={theme.id} onClick={() => onThemeChange(theme.id)} className={`theme-swatch ${currentTheme === theme.id ? 'ring-2 ring-[var(--theme-highlight)]' : ''}`}>
+                        <div className="theme-chips">{theme.colors.map(c => <div key={c} className="theme-chip" style={{backgroundColor: c}}/>)}</div>
+                        <span className="font-bold">{theme.name}</span>
+                    </div>
+                ))}
+                </div>
+            </div>
+            <div className="settings-section">
+                <h3 className="text-xl font-bold mb-3 text-[var(--theme-label)]">Game</h3>
+                 <button onClick={onEditPrompts} className="btn--inline w-full flex items-center justify-center gap-2"><CustomPromptIcon /> Edit Custom Prompts</button>
+                 <div className="flex items-center justify-between mt-3">
+                     <label htmlFor="reduced-motion">Reduced Motion</label>
+                     <input type="checkbox" id="reduced-motion" checked={reducedMotion} onChange={onReducedMotionToggle} className="w-5 h-5 rounded text-[var(--theme-highlight)] bg-white/10 border-white/20 focus:ring-[var(--theme-highlight)]" />
+                 </div>
+            </div>
+            <div className="flex gap-2">
+                <motion.button onClick={onRestart} className="btn btn--secondary flex-1" whileTap={{scale:0.95}}>Restart</motion.button>
+                <motion.button onClick={onQuit} className="btn btn--danger flex-1" whileTap={{scale:0.95}}>Quit</motion.button>
+            </div>
+        </div>
+    </Modal>
+)};
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} activeVisualTheme={activeVisualTheme}>
+        <div className="text-center flex flex-col gap-6">
+            <p className="text-lg text-white/80">{message}</p>
+            <div className="flex gap-4">
+                <motion.button onClick={onClose} className="btn btn--secondary flex-1" whileTap={{scale:0.95}}>Cancel</motion.button>
+                <motion.button onClick={onConfirm} className="btn btn--danger flex-1" whileTap={{scale:0.95}}>Confirm</motion.button>
+            </div>
+        </div>
+    </Modal>
+);
+
+const getInitialSettings = () => {
+    const defaults = {
+        theme: 'velourNights',
+        volumes: { masterVolume: 100, musicVolume: 80, sfxVolume: 100 },
+        reducedMotion: false,
+    };
+    try {
+        const stored = localStorage.getItem('settings');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            return { ...defaults, ...parsed };
+        }
+    } catch (e) {
+        console.warn("Could not parse settings, using defaults.", e);
+    }
+    return defaults;
 };
 
 function App() {
-    const { prompts, updatePrompts, isLoading, userId } = useFirestorePrompts();
+    const { prompts, updatePrompts, resetPrompts, isLoading, userId } = useFirestorePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     const [modalState, setModalState] = useState({ type: null, data: {} });
-    const [currentTheme, setCurrentTheme] = useState('velourNights');
-    const [backgroundTheme, setBackgroundTheme] = useState('velourNights');
+
+    const initialSettings = getInitialSettings();
+    const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
+    const [settings, setSettings] = useState(initialSettings.volumes);
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(initialSettings.reducedMotion);
+    
+    const [backgroundTheme, setBackgroundTheme] = useState(initialSettings.theme);
     const [activeBg, setActiveBg] = useState(1);
-    const [settings, setSettings] = useState({ masterVolume: 100, musicVolume: 80, sfxVolume: 100 });
     const [isMuted, setIsMuted] = useState(false);
     const [pulseLevel, setPulseLevel] = useState(0);
     const [showPowerSurge, setShowPowerSurge] = useState(false);
     const [roundCount, setRoundCount] = useState(0);
     const [isExtremeMode, setIsExtremeMode] = useState(false);
+    const [extremeModeReady, setExtremeModeReady] = useState(false);
     const [extremeRoundSource, setExtremeRoundSource] = useState(null);
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiOrigin, setConfettiOrigin] = useState({x: 0.5, y: 0.5 });
     const [isSpinInProgress, setIsSpinInProgress] = useState(false);
     const [pendingExtremeRound, setPendingExtremeRound] = useState(null);
     const [audioInitFailed, setAudioInitFailed] = useState(false);
-    const [gameState, setGameState] = useState('unlock'); // unlock, onboarding_intro, onboarding_vibe, enterNames, turnIntro, playing
+    const [gameState, setGameState] = useState('unlock');
     const [players, setPlayers] = useState({ p1: 'Player 1', p2: 'Player 2' });
     const [currentPlayer, setCurrentPlayer] = useState('p1');
-    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const mainContentRef = useRef(null);
+    const turnIntroTimeoutRef = useRef(null);
+    
+    const visualThemes = {
+        velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
+        lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
+        velvetCarnival: { bg: 'theme-velvet-carnival-bg', titleText: 'text-white', titleShadow: '#FFD700', themeClass: 'theme-velvet-carnival' },
+        starlitAbyss: { bg: 'theme-starlit-abyss-bg', titleText: 'text-white', titleShadow: '#8A2BE2', themeClass: 'theme-starlit-abyss' },
+        crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' }
+    };
+    const activeVisualTheme = visualThemes[currentTheme] || visualThemes.velourNights;
+    const activeBackgroundClass = visualThemes[currentTheme]?.bg || visualThemes.velourNights.bg;
+
+    const [prevBackgroundClass, setPrevBackgroundClass] = useState(activeBackgroundClass);
+
+    useEffect(() => {
+        try {
+            const settingsToSave = {
+                theme: currentTheme,
+                volumes: settings,
+                reducedMotion: prefersReducedMotion,
+            };
+            localStorage.setItem('settings', JSON.stringify(settingsToSave));
+        } catch (e) {
+            console.error("Failed to save settings to localStorage", e);
+        }
+    }, [currentTheme, settings, prefersReducedMotion]);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
         const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
-        handleChange(); // Set initial state
+        if (localStorage.getItem('settings') === null) {
+            handleChange();
+        }
         mediaQuery.addEventListener('change', handleChange);
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
 
-    // Debug helper and spin state watchdog
     useEffect(() => {
         window.debugReset = () => {
             setIsSpinInProgress(false);
             setModalState({ type: null, data: {} });
             console.log('Force reset game modal/spin state');
         };
-
         const watchdog = setInterval(() => {
             if (window.debugReset && isSpinInProgress && !document.querySelector('.spin-button:disabled')) {
                  const isSpinningVisually = (!!document.querySelector('.spin-button svg.animate-spin'));
@@ -1213,39 +1426,38 @@ function App() {
                  }
             }
         }, 2000);
-
         return () => {
             delete window.debugReset;
             clearInterval(watchdog);
         }
     }, [isSpinInProgress]);
 
-    // 🛡️ Smarter Failsafe: only cleans up *stuck* modals after 10s idle
-useEffect(() => {
-  if (modalState.type && gameState === "playing") {
-    const resetTimer = setTimeout(() => {
-      // Check again before resetting to avoid nuking active modals
-      const activeDialog = document.querySelector('[role="dialog"]');
-      if (!activeDialog && modalState.type) {
-        console.warn("Failsafe: Resetting stale modal state.");
-        setModalState({ type: null, data: {} });
-      }
-    }, 10000); // ⏱ waits 10s instead of 1.2s
-    return () => clearTimeout(resetTimer);
-  }
-}, [modalState.type, gameState]);
+    useEffect(() => {
+        if (modalState.type && gameState === "playing") {
+            const resetTimer = setTimeout(() => {
+                let activeDialog = null;
+                try { activeDialog = document.querySelector('[role="dialog"]'); } catch {}
+                if (!activeDialog && modalState.type) {
+                    console.warn("Failsafe: Resetting stale modal state.");
+                    setModalState({ type: null, data: {} });
+                }
+            }, 10000);
+            return () => clearTimeout(resetTimer);
+        }
+    }, [modalState.type, gameState]);
 
     useEffect(() => {
-        let timer;
+        clearTimeout(turnIntroTimeoutRef.current);
         if (gameState === 'turnIntro') {
-            timer = setTimeout(() => {
+            turnIntroTimeoutRef.current = setTimeout(() => {
                 setGameState('playing');
             }, 2800);
         }
-        return () => clearTimeout(timer);
+        return () => clearTimeout(turnIntroTimeoutRef.current);
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
+        clearTimeout(turnIntroTimeoutRef.current);
         setModalState(current => {
             if (current.type) {
                 console.warn(`Modal race condition blocked: Tried to open '${type}' while '${current.type}' was active.`);
@@ -1254,18 +1466,7 @@ useEffect(() => {
             return { type, data };
         });
     }, []);
-
-    const visualThemes = {
-        velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
-        lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
-        velvetCarnival: { bg: 'theme-velvet-carnival-bg', titleText: 'text-white', titleShadow: '#FFD700', themeClass: 'theme-velvet-carnival' },
-        starlitAbyss: { bg: 'theme-starlit-abyss-bg', titleText: 'text-white', titleShadow: '#8A2BE2', themeClass: 'theme-starlit-abyss' },
-        crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' }
-    };
-
-    const activeVisualTheme = visualThemes[backgroundTheme] || visualThemes.velourNights;
-    const activeBackgroundClass = visualThemes[backgroundTheme]?.bg || visualThemes.velourNights.bg;
-
+    
     useEffect(() => { 
         if (window.Tone) { 
             setScriptLoadState('loaded'); 
@@ -1292,12 +1493,13 @@ useEffect(() => {
     useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted]);
     
     useEffect(() => {
-        const themeToSet = isExtremeMode ? 'crimsonFrenzy' : currentTheme;
-        if (themeToSet !== backgroundTheme) {
-            setActiveBg(prev => prev === 1 ? 2 : 1);
-            setBackgroundTheme(themeToSet);
+        const t = isExtremeMode ? 'crimsonFrenzy' : currentTheme;
+        if (t !== backgroundTheme) {
+            setPrevBackgroundClass(activeBackgroundClass);
+            setActiveBg(prev => (prev === 1 ? 2 : 1));
+            setBackgroundTheme(t);
         }
-    }, [isExtremeMode, currentTheme, backgroundTheme]);
+    }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass]);
 
 
     const handleThemeChange = useCallback((themeId) => {
@@ -1312,7 +1514,7 @@ useEffect(() => {
         if (wheelEl) {
             const rect = wheelEl.getBoundingClientRect();
             const originX = (rect.left + rect.width / 2) / window.innerWidth;
-            const originY = (rect.top + rect.height / 2) / window.innerHeight;
+            const originY = (rect.top + rect.height / 2 + window.scrollY) / document.documentElement.scrollHeight;
             setConfettiOrigin({ x: originX, y: originY });
         }
         setShowPowerSurge(true);
@@ -1330,75 +1532,41 @@ useEffect(() => {
         } 
     }, [isSpinInProgress, modalState.type, pendingExtremeRound, triggerExtremeRound]);
 
-// 🔊 Audio unlock on first user interaction (browser-safe)
-useEffect(() => {
-  const handleUserGesture = async () => {
-    try {
-      const success = await audioEngine.initialize();
-      if (success) {
-        window.removeEventListener("click", handleUserGesture);
-        window.removeEventListener("touchstart", handleUserGesture);
-        console.log("✅ Audio engine initialized after user gesture");
-      }
-    } catch (e) {
-      console.error("Audio init retry failed:", e);
-    }
-  };
-
-  window.addEventListener("click", handleUserGesture);
-  window.addEventListener("touchstart", handleUserGesture);
-
-  // 🛡️ Failsafe: auto-resume if the AudioContext gets suspended (mobile Safari fix)
-  const resumeAudio = async () => {
-    const ctx = window.Tone?.context;
-    if (ctx && ctx.state === "suspended") {
-      try {
-        await ctx.resume();
-        // 💡 optional micro-polish: silence success log to keep console clean
-        // console.log("🔁 Audio context resumed automatically");
-      } catch (err) {
-        console.warn("Audio resume attempt failed:", err);
-      }
-    }
-  };
-
-  const resumeInterval = setInterval(resumeAudio, 10000); // check every 10s
-
-  // ✅ single unified cleanup return
-  return () => {
-    window.removeEventListener("click", handleUserGesture);
-    window.removeEventListener("touchstart", handleUserGesture);
-    clearInterval(resumeInterval);
-  };
-}, []);
-
-        const handleUnlockAudio = useCallback(async () => {
-        if (scriptLoadState !== 'loaded' || isUnlockingAudio) {
-            if (scriptLoadState !== 'loaded') setAudioInitFailed(true);
-            setGameState('onboarding_intro');
-            return;
-        }
+    const handleUnlockAudio = useCallback(async () => {
+        if (isUnlockingAudio) return;
         setIsUnlockingAudio(true);
-        try {
-            // ✅ Must be called inside a click/tap gesture
+    
+        const attemptAudioInit = async () => {
+            if (!window.Tone || !window.Tone.context) {
+                setScriptLoadState('error');
+                return false;
+            }
             await window.Tone.start();
-
-            // Initialize the engine now that the context is running
+            await window.Tone.context.resume();
             const success = await audioEngine.initialize();
-            
             if (success) {
-                // Start the default theme safely
-                audioEngine.startTheme("velourNights");
-            } else {
-                 setAudioInitFailed(true);
+                await audioEngine.startTheme("velourNights");
+            }
+            return success;
+        };
+    
+        try {
+            const success = await attemptAudioInit();
+            if (!success) {
+                setTimeout(async () => {
+                    console.log("Retrying audio initialization...");
+                    const retrySuccess = await attemptAudioInit();
+                    if (!retrySuccess) setAudioInitFailed(true);
+                }, 1000);
             }
         } catch (err) {
             console.error("Audio init failed:", err);
             setAudioInitFailed(true);
+        } finally {
+            setGameState('onboarding_intro');
+            setIsUnlockingAudio(false);
         }
-        setGameState('onboarding_intro');
-        setIsUnlockingAudio(false);
-    }, [scriptLoadState, isUnlockingAudio, setGameState, setIsUnlockingAudio, setAudioInitFailed]);
+    }, [isUnlockingAudio]);
 
     const handleNameEntry = useCallback((playerNames) => { 
         setPlayers(playerNames); 
@@ -1429,12 +1597,12 @@ useEffect(() => {
 
         if (newPulseLevel >= 100 && !isExtremeMode) {
              setPendingExtremeRound('spark');
-             setPulseLevel(100); // Set to 100 to show full meter before extreme round starts
+             setPulseLevel(100);
         } else {
             setPulseLevel(newPulseLevel);
         }
     
-        if (!isExtremeMode && newPulseLevel < 100 && Math.random() < 0.1) { // Reduced random chance slightly
+        if (!isExtremeMode && newPulseLevel < 100 && Math.random() < 0.1) {
             if (isSpinInProgress || modalState.type) {
                 setPendingExtremeRound('random');
             } else {
@@ -1458,9 +1626,11 @@ useEffect(() => {
         endRoundAndStartNew();
     }, [handleCloseModal, endRoundAndStartNew]);
 
-    const handleExtremeIntroClose = useCallback(() => { 
-        setModalState({ type: null, data: {} }); 
-        setIsExtremeMode(true); 
+    const handleExtremeIntroClose = useCallback(() => {
+        setModalState({ type: null });
+        setIsExtremeMode(true);
+        setGameState("extremeRound");
+        setExtremeModeReady(true);
         if (extremeRoundSource === 'spark' && (roundCount + 1) % 5 === 0) {
             setTimeout(() => setPulseLevel(0), 1000);
         }
@@ -1481,22 +1651,20 @@ useEffect(() => {
         const text = pickPrompt(category, validList);
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
-        // Failsafe state reset
         setTimeout(() => {
             safeOpenModal('prompt', { title, text });
             setIsSpinInProgress(false);
-        }, 600); // Delay to allow pointer settle animation
+        }, 600);
     }, [prompts, isExtremeMode, pickPrompt, safeOpenModal]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
-        setModalState(prev => ({...prev, type: null})); // Close prompt modal
+        setModalState(prev => ({...prev, type: null}));
         
         const list = isExtremeMode ? [...(prompts.consequences.extreme || [])] : [...(prompts.consequences.normal || []), ...(prompts.consequences.spicy || [])]; 
         const filteredList = list.filter(c => c && c.trim() !== ''); 
         const text = filteredList.length > 0 ? filteredList[Math.floor(Math.random() * filteredList.length)] : "Add consequences in the editor!"; 
         
-        // Use a timeout to ensure the state update has processed before opening the next modal
         setTimeout(() => {
             safeOpenModal('consequence', { text });
         }, 50);
@@ -1516,9 +1684,9 @@ useEffect(() => {
 
     const handleConfirmReset = useCallback(() => { 
         audioEngine.playRefuse(); 
-        updatePrompts(defaultPrompts); 
+        resetPrompts(); 
         setModalState({ type: 'editor', data: { from: 'settings' } }); 
-    }, [updatePrompts]);
+    }, [resetPrompts]);
 
     const handleRestartGame = useCallback(() => {
         setPulseLevel(0);
@@ -1546,513 +1714,136 @@ useEffect(() => {
         };
 
         if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
-        {console.log("ModalState:", modalState)}
+        
+        const canSpin = !isSpinInProgress && !modalState.type && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
 
-        // === 🧭 Primary Game State Screen Flow ===
-return (
-  <AnimatePresence mode="wait" initial={false}>
-    {gameState === "unlock" && (
-      <motion.div
-        key="unlock"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <AudioUnlockScreen
-          onUnlock={handleUnlockAudio}
-          disabled={scriptLoadState !== "loaded" || isUnlockingAudio}
-          {...onboardingProps}
-        />
-      </motion.div>
-    )}
-
-    {gameState === "onboarding_intro" && (
-      <motion.div key="onboarding_intro" {...motionProps}>
-        <OnboardingIntro
-          onNext={() => setGameState("onboarding_vibe")}
-          {...onboardingProps}
-        />
-      </motion.div>
-    )}
-
-    {gameState === "onboarding_vibe" && (
-      <motion.div key="onboarding_vibe" {...motionProps}>
-        <OnboardingVibePicker
-          currentTheme={currentTheme}
-          onVibeSelect={(theme) => {
-            handleThemeChange(theme);
-            setGameState("enterNames");
-          }}
-          {...onboardingProps}
-        />
-      </motion.div>
-    )}
-
- {gameState === "enterNames" && (
-  <motion.div key="enterNames" {...motionProps}>
-    <PlayerNameScreen // ✅ Re-add the component name here
-      onStart={handleNameEntry}
-      {...onboardingProps}
-    />
-  </motion.div>
-)}
-
-
-    {(gameState === "playing" || gameState === "turnIntro") && (
-      <motion.div
-        key="playing"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div
-          ref={mainContentRef}
-          className="w-full h-full z-[60] flex flex-col"
-        >
-          {/* === Header === */}
-          <header className="relative w-full flex justify-center items-center p-4 pt-6 shrink-0">
-            <h1
-              className={`text-6xl ${activeVisualTheme.titleText} font-['Great_Vibes']`}
-              style={{
-                filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})`,
-              }}
-            >
-              Pulse
-            </h1>
-
-            {/* Settings Button */}
-            <motion.button
-              onClick={() => {
-                audioEngine.playUIConfirm();
-                setModalState({ type: "settings" });
-              }}
-              className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg"
-              whileTap={{ scale: 0.9, rotate: -15 }}
-              whileHover={{
-                scale: 1.15,
-                rotate: 15,
-                boxShadow: "0 0 25px var(--theme-highlight)",
-              }}
-              aria-label="Settings"
-            >
-              <SettingsIcon />
-            </motion.button>
-          </header>
-
-          {/* === Main Game Area === */}
-          <main
-            className="w-full flex-grow flex flex-col items-center justify-center px-4"
-            style={{ perspective: "1000px" }}
-          >
-            <div className="relative w-[min(85vw,380px)] sm:w-[min(55vh,420px)] aspect-square mt-[clamp(2rem,8vh,5rem)]">
-              <Wheel
-                onSpinFinish={handleSpinFinish}
-                playWheelSpinStart={audioEngine.playWheelSpinStart}
-                playWheelTick={audioEngine.playWheelTick}
-                playWheelStop={audioEngine.playWheelStopSound}
-                setIsSpinInProgress={setIsSpinInProgress}
-                currentTheme={backgroundTheme}
-                canSpin={
-                  !modalState.type &&
-                  gameState === "playing" &&
-                  !isSpinInProgress
-                }
-                reducedMotion={prefersReducedMotion}
-              />
-            </div>
-          </main>
-
-          {/* === Pulse Meter Footer === */}
-          <footer className="w-full p-4 flex flex-col items-center shrink-0 mb-[clamp(2rem,8vh,5rem)]">
-            <div className="w-full max-w-md">
-              <PulseMeter
-                level={pulseLevel}
-                bpm={audioEngine.getCurrentBpm()}
-              />
-            </div>
-          </footer>
-
-          {/* === Audio Error Badge === */}
-          {audioInitFailed && (
-            <div className="fixed bottom-24 right-4 z-[60] bg-red-900/50 text-white text-xs px-3 py-1 rounded-full border border-red-500 backdrop-blur-sm">
-              Audio failed to initialize.
-            </div>
-          )}
-        </div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
+        return (
+            <AnimatePresence mode="wait" initial={false}>
+                {gameState === "unlock" && (
+                <motion.div key="unlock" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+                     <AudioUnlockScreen onUnlock={handleUnlockAudio} disabled={isUnlockingAudio} {...onboardingProps} />
+                </motion.div>
+                )}
+                {gameState === "onboarding_intro" && (
+                <motion.div key="onboarding_intro" {...motionProps}>
+                    <OnboardingIntro onNext={() => setGameState("onboarding_vibe")} {...onboardingProps} />
+                </motion.div>
+                )}
+                {gameState === "onboarding_vibe" && (
+                <motion.div key="onboarding_vibe" {...motionProps}>
+                    <OnboardingVibePicker currentTheme={currentTheme} onVibeSelect={(theme) => { handleThemeChange(theme); setGameState("enterNames"); }} {...onboardingProps} />
+                </motion.div>
+                )}
+                {gameState === "enterNames" && (
+                <motion.div key="enterNames" {...motionProps}>
+                    <PlayerNameScreen onStart={handleNameEntry} {...onboardingProps} />
+                </motion.div>
+                )}
+                {(gameState === "playing" || gameState === "turnIntro" || gameState === "extremeRound") && (
+                <motion.div key="playing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+                    <div ref={mainContentRef} className="w-full h-full z-[60] flex flex-col">
+                        <header className="relative w-full flex justify-center items-center p-4 pt-6 shrink-0">
+                            <h1 className={`text-6xl ${activeVisualTheme.titleText} font-['Great_Vibes']`} style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>
+                                Pulse
+                            </h1>
+                            <motion.button onClick={() => { audioEngine.playUIConfirm(); setModalState({ type: "settings" }); }} className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg" whileTap={{ scale: 0.9, rotate: -15 }} whileHover={{ scale: 1.15, rotate: 15, boxShadow: "0 0 25px var(--theme-highlight)" }} aria-label="Settings">
+                                <SettingsIcon />
+                            </motion.button>
+                        </header>
+                        <main className="w-full flex-grow flex flex-col items-center justify-center px-4" style={{ perspective: "1000px" }}>
+                            <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} />
+                            <PulseMeter level={pulseLevel} />
+                             {(gameState === 'playing' || gameState === 'extremeRound') && (
+                                <div className="turn-banner">
+                                    {players[currentPlayer]}'s Turn!
+                                </div>
+                             )}
+                        </main>
+                        <footer className="w-full p-4 flex flex-col items-center shrink-0">
+                        </footer>
+                        {audioInitFailed && (
+                            <div className="fixed bottom-24 right-4 z-[60] bg-red-900/50 text-white text-xs px-3 py-1 rounded-full border border-red-500 backdrop-blur-sm">
+                            Audio failed to initialize.
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
+                )}
+            </AnimatePresence>
+        );
     };
 
     return (
-        <div id="app-container" className={`min-h-screen font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`} style={{'--pulse-glow-intensity': `${pulseLevel / 100}`, '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`}}>
+        <div
+            id="app-container"
+            className={`min-h-screen ${activeVisualTheme.themeClass} font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`}
+            style={{
+                '--pulse-glow-intensity': `${pulseLevel / 100}`,
+                '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`
+            }}
+        >
             <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
-                <style>{`
-                    /* ==============================================
-                    Z-INDEX HIERARCHY
-                    ==============================================
-                    -1  : Background Layers
-                    10  : Noise Overlay, Vignette, Radial Lighting
-                    15  : HDR Glow, Aurora Reflect
-                    40  : Particle Background
-                    60  : Main Game UI (Wheel, Pulse Meter)
-                    100 : Confetti Effect
-                    110 : Modals
-                    120 : Turn Banner
-                    125 : Extreme Intro Effect BG
-                    130 : Power Surge Effect
-                    ==============================================
-                    */
-                    :root { --fluid-fs: clamp(14px, 1.5vw + 1vh, 18px); }
-                    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
-                    @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400..900&display=swap');
-                    body { font-family: 'Inter', sans-serif; color: white; margin: 0; background-color: #000; font-size: var(--fluid-fs); }
-                    @keyframes ripple-glow { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; } 100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; } }
-                    @keyframes background-pan { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-                    @keyframes noise-pan { 0% { transform: translate(0, 0); } 10% { transform: translate(-5%, -10%); } 20% { transform: translate(-15%, 5%); } 30% { transform: translate(7%, -25%); } 40% { transform: translate(-5%, 25%); } 50% { transform: translate(-15%, 10%); } 60% { transform: translate(15%, 0%); } 70% { transform: translate(0%, 15%); } 80% { transform: translate(-5%, 5%); } 90% { transform: translate(10%, -20%); } 100% { transform: translate(0, 0); } }
-                    @keyframes modal-title-shimmer { from { background-position: -150px 0; } to { background-position: 150px 0; } }
-                    @keyframes meter-breath { 0% { filter: brightness(1) drop-shadow(0 0 4px var(--meter-stop-3)); } 50% { filter: brightness(1.2) drop-shadow(0 0 10px var(--meter-stop-3)); } 100% { filter: brightness(1) drop-shadow(0 0 4px var(--meter-stop-3)); } }
-                    @keyframes glitch { 2%, 64% { transform: translate(2px, 0) skew(0deg); } 4%, 60% { transform: translate(-2px, 0) skew(0deg); } 62% { transform: translate(0, 0) skew(5deg); } }
-                    @keyframes aurora { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
-                    @keyframes neon-flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-                    @keyframes ripple { from { transform: scale(0); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-                    @keyframes wave-move { from { background-position-x: 0; } to { background-position-x: -200px; } }
-                    @keyframes shimmer-pulse { 0%,100% { opacity:0.4; transform: translate(--50%, -50%) scale(1);} 50% { opacity:0.8; transform: translate(-50%, -50%) scale(1.05);} }
-                    @keyframes pulse-sync { 0%,100% { filter: blur(5px); opacity: .5; } 50% { filter: blur(10px); opacity: 1; } }
-                    @keyframes hue-shift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
+                <div className={`bg-layer ${activeBg === 1 ? 'opacity-100' : 'opacity-0'} ${prevBackgroundClass}`} />
+                <div className={`bg-layer ${activeBg === 2 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`} />
+                
+                <ParticleBackground
+                    currentTheme={backgroundTheme}
+                    pulseLevel={pulseLevel}
+                    bpm={audioEngine.getCurrentBpm()}
+                    reducedMotion={prefersReducedMotion}
+                />
+                <div className="hdr-glow-overlay" />
+                <Vignette />
+                <NoiseOverlay reducedMotion={prefersReducedMotion} />
+                <div className="aurora-reflect" />
+                <RadialLighting reducedMotion={prefersReducedMotion} />
+                
+                <AnimatePresence>
+                {showConfetti && (
+                    <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={currentTheme} reducedMotion={prefersReducedMotion} />
+                )}
+                {showPowerSurge && (
+                    <PowerSurgeEffect key="power-surge" onComplete={() => setShowPowerSurge(false)} reducedMotion={prefersReducedMotion} />
+                )}
+                </AnimatePresence>
 
-                    .wheel-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform-style: preserve-3d; }
-                    .wheel-canvas { position: relative; width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 8px 40px rgba(0,0,0,0.35); }
-                    .wheel-canvas::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 25% 25%, rgba(255,255,255,0.2), transparent 70%); mix-blend-mode: overlay; pointer-events: none; }
-                    .wheel-shimmer { position:absolute; top:50%; left:50%; width:100%; height:100%; border-radius:50%; background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 40%); pointer-events:none; z-index:15; animation:shimmer-pulse 2.5s ease-in-out infinite; }
-                    .hub { position: absolute; width: 25%; height: 25%; display: flex; align-items: center; justify-content: center; transform-style: preserve-3d; }
-                    .pointer { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); z-index: 10; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.5)) drop-shadow(0 0 8px var(--theme-highlight, #FFD700)); transition: filter 0.3s ease; transform-origin: 50% 100%; }
-                    .pointer-tip-outer { width: 44px; height: 35px; clip-path: polygon(50% 100%, 0 0, 100% 0); background: linear-gradient(to bottom, #FFD700, #D4AF37); padding: 2px; }
-                    .pointer-tip-inner { width: 100%; height: 100%; clip-path: polygon(50% 100%, 0 0, 100% 0); background: linear-gradient(to bottom, #FCE9A0, #E6C468); position: relative; }
-                    .pointer-tip-inner::before { content: ''; position: absolute; top: 1px; left: 5px; right: 5px; height: 1px; background: rgba(255,255,255,0.7); }
-
-                    .metallic-input-wrapper { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); box-shadow: inset 1px 1px 2px rgba(255,255,255,0.15), inset -1px -1px 2px rgba(0,0,0,0.25); border-radius: 24px; transition: all 0.3s ease; }
-                    .metallic-input-wrapper:focus-within { border-color: var(--theme-highlight); box-shadow: 0 0 20px -5px var(--theme-highlight), inset 1px 1px 2px rgba(255,255,255,0.15), inset -1px -1px 2px rgba(0,0,0,0.25); }
-                    .metallic-input-wrapper input { background: transparent; box-shadow: none; text-shadow: none; font-weight: 700; }
-                    .metallic-input-wrapper input::placeholder { color: var(--theme-base); opacity: 0.6; text-shadow: none; font-weight: 400; }
-                    
-                    .theme-velour-nights { --theme-highlight:#FFD700; --theme-base:#D4AF37; --theme-shadow:#7A5C00; --theme-label:#FFD700; --meter-stop-0:#9b59b6; --meter-stop-1:#D4AF37; --meter-stop-2:#FFD700; --meter-stop-3:#F777B6; --wave-glow-color: #F777B6;}
-                    .theme-lotus-dreamscape{ --theme-highlight:#E6E6FA; --theme-base:#C0C0C0; --theme-shadow:#5A5A7A; --theme-label:#E6E6FA; --meter-stop-0:#6A5ACD; --meter-stop-1:#9AA4FF; --meter-stop-2:#C0C0C0; --meter-stop-3:#E6E6FA; --wave-glow-color: #ADD8E6;}
-                    .theme-velvet-carnival{ --theme-highlight:#FF944D; --theme-base:#FF4500; --theme-shadow:#662200; --theme-label:#FFD700; --meter-stop-0:#FF7F50; --meter-stop-1:#FFA559; --meter-stop-2:#FFD700; --meter-stop-3:#FF4500; --wave-glow-color: #FFD700;}
-                    .theme-starlit-abyss { --theme-highlight:rgba(224,255,255,0.8); --theme-base:#8A2BE2; --theme-shadow:#1C1030; --theme-label:#E0FFFF; --meter-stop-0:#4B5D9A; --meter-stop-1:#6C5CE7; --meter-stop-2:#8A2BE2; --meter-stop-3:rgba(224,255,255,0.7); --wave-glow-color: #C792EA;}
-                    .theme-crimson-frenzy{ --theme-highlight:#FFD700; --theme-base:#DC143C; --theme-shadow:#3D0000; --theme-label:#FFD700; --meter-stop-0:#F08080; --meter-stop-1:#DC143C; --meter-stop-2:#FF6F91; --meter-stop-3:#FFD700; --wave-glow-color: #FF4500;}
-
-                    .btn{ --btn-text:#fff; --btn-edge:rgba(255,255,255,0.08); --btn-gloss:rgba(255,255,255,0.75); --btn-shadow:rgba(0,0,0,0.55); border:0; border-radius:9999px; padding:.9rem 1.25rem; font-weight:800; letter-spacing:.02em; cursor:pointer; transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, filter 0.15s ease-out; outline:none; position:relative; min-height:44px; }
-                    .btn:focus-visible{ box-shadow:0 0 0 2px var(--theme-highlight), inset 1px 1px 2px rgba(255,255,255,0.15), inset -1px -1px 2px rgba(0,0,0,0.25); }
-                    .btn--primary{ background:radial-gradient(circle at 50% 38%, var(--theme-highlight), var(--theme-base) 90%); box-shadow: inset 0 2px 3px var(--btn-gloss), 0 14px 28px var(--btn-shadow); }
-                    .btn--primary:hover:not(:disabled){ box-shadow: inset 0 2px 3px var(--btn-gloss), 0 18px 36px var(--btn-shadow); }
-                    .btn--primary:active:not(:disabled){ box-shadow: inset 0 10px 18px rgba(0,0,0,.6); }
-                    .btn--secondary{ background:rgba(255,255,255,0.08); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.2); box-shadow:inset 0 1px 2px rgba(255,255,255,.08), 0 8px 18px rgba(0,0,0,.35); color:var(--theme-label); }
-                    .btn--secondary:hover:not(:disabled){ box-shadow:0 12px 28px rgba(0,0,0,.4), 0 0 18px -6px var(--theme-highlight); }
-                    .btn--danger{ color: white; background:radial-gradient(circle at 50% 40%, #FF889A, #D91E36 90%); box-shadow: inset 0 2px 3px var(--btn-gloss), 0 14px 28px rgba(139,0,0,.6); }
-                    .btn--danger:hover:not(:disabled) { box-shadow: inset 0 2px 3px var(--btn-gloss), 0 18px 36px var(--btn-shadow); }
-                    .btn--danger:active:not(:disabled) { box-shadow: inset 0 10px 18px rgba(0,0,0,.6); }
-                    .btn--inline{ padding:.5rem .9rem; font-weight:700; border-radius:9999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color: var(--theme-label); text-align:center;}
-                    .btn--inline:hover{ filter:brightness(1.1); box-shadow: 0 0 8px -4px var(--theme-highlight); }
-                  
-                    .editor-scroll-container::before, .editor-scroll-container::after { content:''; position:absolute; left:0; right:0; height:30px; z-index:1; pointer-events:none; transition: opacity .2s ease; }
-                    .editor-scroll-container::before { top:0; background:linear-gradient(to bottom, rgba(10,6,16,1), transparent); }
-                    .editor-scroll-container::after { bottom:0; background:linear-gradient(to top, rgba(10,6,16,1), transparent); }
-                    .editor-scroll-container[data-at-top="true"]::before { opacity:0; }
-                    .editor-scroll-container[data-at-bottom="true"]::after { opacity:0; }
-                    .editor-scroll-area { max-height: 45vh; overflow-y: auto; padding-right: 8px; }
-
-                    .settings-section{ background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:16px; }
-                    .theme-swatch{ display:flex; gap:8px; align-items:center; padding:10px; border-radius:14px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; }
-                    .theme-swatch:hover{ transform:translateY(-1px); box-shadow:0 12px 30px rgba(0,0,0,.35); }
-                    .theme-chips{ display:flex; gap:6px; }
-                    .theme-chip{ width:14px; height:14px; border-radius:50%; border:1px solid rgba(255,255,255,.25); }
-
-                    input[type=range]{ appearance:none; height:8px; border-radius:9999px; background:linear-gradient(90deg, rgba(255,255,255,.1), rgba(255,255,255,.06)); outline:none; }
-                    input[type=range]::-webkit-slider-thumb{ appearance:none; width:22px; height:22px; border-radius:50%; background:radial-gradient(circle at 40% 40%, #fff, var(--theme-highlight)); border:1px solid rgba(0,0,0,.25); box-shadow:0 6px 16px rgba(0,0,0,.4); cursor:pointer; }
-                    input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background:radial-gradient(circle at 40% 40%, #fff, var(--theme-highlight)); border: 1px solid rgba(0,0,0,.25); box-shadow:0 6px 16px rgba(0,0,0,.4); cursor: pointer; }
-
-                    .pulse-meter-container { position: relative; width: 100%; height: 32px; border-radius: 9999px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); padding: 4px; overflow: hidden; }
-                    .pulse-meter-fill { position:relative; height:100%; border-radius:9999px; background:linear-gradient(90deg,var(--meter-stop-0),var(--meter-stop-1) 35%,var(--meter-stop-2) 75%,var(--meter-stop-3)); overflow:hidden; animation:meter-breath var(--beat-duration) ease-in-out infinite; filter: blur(0.5px) saturate(1.3); transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-                    .pulse-meter-gloss { position: absolute; top: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.1)); opacity: 0.8; border-radius: 9999px 9999px 0 0; }
-                    .pulse-meter-wave { position:absolute; top:0; left:0; width:100%; height:100%; background:url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%2732%27><path d=%27M0 16 Q 25 0, 50 16 T 100 16 T 150 16 T 200 16%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272%27 opacity=%270.6%27/></svg>") repeat-x; background-size: 200px 100%; animation:wave-move var(--wave-duration, 2s) linear infinite; mix-blend-mode:overlay; filter:drop-shadow(0 0 3px var(--wave-glow-color)); }
-                    .pulse-meter-outer-glow { position: absolute; inset: 0; border-radius: 9999px; box-shadow: 0 0 15px var(--meter-stop-3); animation: pulse-sync var(--beat-duration) ease-in-out infinite; }
-                    .pulse-meter-ripple { position: absolute; inset: 0; border-radius: 9999px; border: 2px solid var(--meter-stop-3); }
-                    
-                    @media (prefers-reduced-motion: reduce) { 
-                        #app-container *, .reduced-motion * { transition:none!important; } 
-                        .reduced-motion .pulse-meter-ripple, .reduced-motion .pulse-meter-outer-glow, .reduced-motion .begin-button::before, .reduced-motion .vignette-overlay, .reduced-motion .wheel-shimmer { animation: none !important; }
-                        #app-container .wheel-canvas, .reduced-motion .wheel-canvas { transform: none !important; } 
-                    }
-                    
-                    .bg-layer { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; background-size: 200% 200%; animation: background-pan 15s ease infinite; animation-duration: calc(20s - (var(--pulse-glow-intensity, 0) * 10s)); transition: opacity 0.5s ease-in-out; background-blend-mode: overlay; }
-                    .theme-velour-nights-bg { background-image: linear-gradient(135deg, #4c1d2f 0%, #2c1a2b 50%, #200f18 100%), radial-gradient(circle at 70% 30%, rgba(247, 119, 182, 0.25), transparent 60%); }
-                    .theme-lotus-dreamscape-bg { background-image: linear-gradient(135deg, #2D2447 0%, #4B0082 50%, #191526 100%), radial-gradient(circle at 30% 70%, rgba(106, 90, 205, 0.3), transparent 60%); }
-                    .theme-velvet-carnival-bg { background-image: linear-gradient(135deg, #6b2c00 0%, #3d1a00 50%, #2e1100 100%), radial-gradient(circle at 80% 80%, rgba(255, 69, 0, 0.2), transparent 50%); }
-                    .theme-starlit-abyss-bg { background-image: linear-gradient(135deg, #0A0C24 0%, #1D1A4B 25%, #13143B 75%, #0B0F2A 100%), radial-gradient(circle at 30% 70%, rgba(138,43,226,0.25), transparent 70%); }
-                    .theme-crimson-frenzy-bg { background-image: linear-gradient(135deg, #2b0000 0%, #4b0000 50%, #1c0000 100%), radial-gradient(circle at 50% 50%, rgba(220, 20, 60, 0.3), transparent 70%); }
-                    
-                    .spin-button { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--theme-base); position: relative; transform-style: preserve-3d; perspective: 800px; transition: transform 0.1s ease, box-shadow 0.1s ease; box-shadow: 0 6px 18px rgba(0,0,0,0.45), inset 0 2px 3px var(--btn-gloss); }
-                    .spin-button:hover:not(:disabled) { transform: translateZ(3px); box-shadow: 0 8px 24px rgba(0,0,0,0.55), inset 0 2px 3px var(--btn-gloss); }
-                    .spin-button:active:not(:disabled) { transform: translateZ(1px) scale(0.97); box-shadow: 0 4px 14px rgba(0,0,0,0.65), inset 0 2px 3px var(--btn-gloss); }
-                    .spin-button:disabled { cursor: not-allowed; filter: grayscale(0.5) brightness(0.7); }
-                    .spin-button-text { font-family: 'Inter', sans-serif; font-weight: 800; font-size: clamp(1rem, 5vw, 1.5rem); color: var(--theme-shadow); filter: drop-shadow(0 1px 1px rgba(255,255,255,0.5)); }
-                    
-                    .begin-button { border-radius: 9999px; position: relative; overflow: hidden; will-change: transform; }
-                    .begin-button::before { content: ''; position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--theme-highlight); animation: ripple-glow 2s infinite ease-out; will-change: transform, opacity; }
-                    .begin-button:disabled::before { display: none; }
-                    .vignette-overlay { box-shadow: inset 0 0 15vw 5vw rgba(0,0,0,0.5); animation: pulse-vignette var(--beat-duration) infinite alternate ease-in-out; }
-                    @keyframes pulse-vignette { from { box-shadow: inset 0 0 15vw 5vw rgba(0,0,0,0.4); } to { box-shadow: inset 0 0 18vw 6vw rgba(0,0,0,0.6); } }
-                    .bg-power-surge { background: radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 70%); }
-                    .noise-animated { background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJub2lzZSI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuOCIgbnVtT2N0YXZlcz0iMyIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWx0ZXI9InVybCgjbm9pc2UpIi8+PC9zdmc+'); animation: noise-pan 15s steps(20) infinite; }
-                    .radial-light-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; background: radial-gradient(200px circle at var(--light-x, -100%) var(--light-y, -100%), rgba(255,255,255,0.15), transparent); mix-blend-mode: soft-light; transition: background 0.2s ease-out; }
-                    .hdr-glow-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 15; background: radial-gradient(circle at 50% 50%, var(--theme-highlight) 0%, transparent 60%); mix-blend-mode: screen; opacity: calc(var(--pulse-glow-intensity) * 0.4); transition: opacity 0.3s ease-out; }
-                    .aurora-reflect { position: fixed; inset: 0; background: radial-gradient(circle at var(--light-x,50%) var(--light-y,50%), rgba(255,255,255,0.08), transparent 70%); mix-blend-mode: soft-light; pointer-events: none; z-index: 15; }
-                    
-                    .extreme-effect-bg.crimsonFrenzy { background: radial-gradient(circle, rgba(255, 0, 0, 0.1), transparent 70%); }
-                    .extreme-scanlines { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(255,0,0,0.2) 51%); background-size: 100% 8px; animation: glitch 0.5s infinite; }
-                    .extreme-effect-bg.starlitAbyss { background: linear-gradient(135deg, rgba(72,61,139,0.3) 0%, rgba(138,43,226,0.3) 50%, rgba(65,105,225,0.3) 100%); background-size: 400% 400%; animation: aurora 8s ease-in-out infinite; }
-                    .extreme-effect-bg.velvetCarnival { box-shadow: inset 0 0 30px 10px #FFD700; animation: neon-flicker 0.2s infinite alternate; }
-                    .extreme-effect-bg.lotusDreamscape::before { content: '🌸'; position: absolute; font-size: 3rem; color: #FFB7FF; animation: drift 10s linear infinite; top: -10%; left: 10%; }
-                    .extreme-effect-bg.lotusDreamscape::after { content: '💮'; position: absolute; font-size: 2rem; color: #ADD8E6; animation: drift 15s linear infinite reverse; bottom: -10%; right: 20%; }
-                    @keyframes drift { to { transform: translateY(120vh) translateX(20vw) rotate(720deg); opacity: 0; } }
-
-                    @supports not (backdrop-filter: blur(1px)) { .modal-metallic, .metallic-input-wrapper { background: rgba(20, 10, 30, 0.9); } }
-                    
-                    /* Pre-game button color overrides */
-                    .theme-velour-nights:not(:has(main)) .btn--primary,
-                    .theme-velvet-carnival:not(:has(main)) .btn--primary,
-                    .theme-crimson-frenzy:not(:has(main)) .btn--primary {
-                        background: radial-gradient(circle at 50% 38%, #ff6b81 0%, #e3586e 90%);
-                        color: white;
-                    }
-                    .theme-velour-nights:not(:has(main)) .btn--primary:hover:not(:disabled),
-                    .theme-velvet-carnival:not(:has(main)) .btn--primary:hover:not(:disabled),
-                    .theme-crimson-frenzy:not(:has(main)) .btn--primary:hover:not(:disabled) {
-                        box-shadow: 0 8px 24px rgba(227, 88, 110, 0.55), inset 0 2px 3px var(--btn-gloss);
-                    }
-
-                    .theme-starlit-abyss:not(:has(main)) .btn--primary {
-                        background: radial-gradient(circle at 50% 38%, #7bb1ff 0%, #5c95e6 90%);
-                         color: white;
-                    }
-                    .theme-starlit-abyss:not(:has(main)) .btn--primary:hover:not(:disabled) {
-                        box-shadow: 0 8px 24px rgba(92, 149, 230, 0.55), inset 0 2px 3px var(--btn-gloss);
-                    }
-
-                    .theme-lotus-dreamscape:not(:has(main)) .btn--primary {
-                        background: radial-gradient(circle at 50% 38%, #c792ea 0%, #a365d8 90%);
-                         color: white;
-                    }
-                    .theme-lotus-dreamscape:not(:has(main)) .btn--primary:hover:not(:disabled) {
-                        box-shadow: 0 8px 24px rgba(163, 101, 216, 0.55), inset 0 2px 3px var(--btn-gloss);
-                    }
-
-                    /* --- PERFORMANCE OPTIMIZATIONS --- */
-                    .bg-layer,.vignette-overlay,.aurora-reflect,.noise-animated,.radial-light-overlay,.hdr-glow-overlay {
-                      will-change: opacity, transform, filter;
-                      transform: translateZ(0);
-                    }
-                    canvas,button {
-                      touch-action: manipulation;
-                      -webkit-tap-highlight-color: transparent;
-                    }
-                    .modal-metallic,.settings-section {
-                      contain: layout paint size style;
-                    }
-                `}</style>
-
-            {/* === Background Layers === */}
-{/* === Background Layers === */}
-<div
-  className={`bg-layer ${activeBg === 1 ? "opacity-100" : "opacity-0"} ${activeBackgroundClass}`}
-/>
-<div
-  className={`bg-layer ${activeBg === 2 ? "opacity-100" : "opacity-0"} ${activeBackgroundClass}`}
-/>
-
-<div className="hdr-glow-overlay" />
-<Vignette />
-<ParticleBackground
-  currentTheme={backgroundTheme}
-  pulseLevel={pulseLevel}
-  bpm={audioEngine.getCurrentBpm()}
-  reducedMotion={prefersReducedMotion}
-/>
-<NoiseOverlay reducedMotion={prefersReducedMotion} />
-<div className="aurora-reflect" />
-<RadialLighting reducedMotion={prefersReducedMotion} />
-
-{/* === Global Effects === */}
-<AnimatePresence>
-  {showConfetti && (
-    <Confetti
-      key="confetti"
-      onFinish={() => setShowConfetti(false)}
-      origin={confettiOrigin}
-      theme={backgroundTheme}
-      reducedMotion={prefersReducedMotion}
-    />
-  )}
-  {showPowerSurge && (
-    <PowerSurgeEffect
-      key="power-surge"
-      onComplete={() => setShowPowerSurge(false)}
-      reducedMotion={prefersReducedMotion}
-    />
-  )}
-</AnimatePresence>
-
-{/* === Main App Content === */}
-<div
-  id="app-content"
-  aria-hidden={!!modalState.type}
-  className="w-full h-screen relative overflow-hidden"
->
-  {renderContent()}
-</div>
-
-{/* === TURN BANNER === */}
-<AnimatePresence initial={false}>
-  {gameState === "turnIntro" && (
-    <TurnBanner
-      key={`turn-banner-${roundCount}`}
-      playerName={players[currentPlayer]}
-    />
-  )}
-</AnimatePresence>
-
-{/* === MODAL LAYER === */}
-<AnimatePresence initial={false}>
-  {modalState.type === "extremeIntro" && (
-    <>
-      <ExtremeIntroEffect
-        key={`introfx-${backgroundTheme}`}
-        theme={backgroundTheme}
-        reducedMotion={prefersReducedMotion}
-      />
-      <ExtremeIntroModal
-        isOpen={true}
-        onClose={handleExtremeIntroClose}
-        activeVisualTheme={activeVisualTheme}
-      />
-    </>
-  )}
-
-  {modalState.type === "prompt" && (
-    <PromptModal
-      key="prompt"
-      isOpen={true}
-      onClose={handlePromptModalClose}
-      onRefuse={handleRefuse}
-      prompt={modalState.data}
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-
-  {modalState.type === "consequence" && (
-    <ConsequenceModal
-      key="consequence"
-      isOpen={true}
-      onClose={handleConsequenceClose}
-      text={modalState.data.text}
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-
-  {modalState.type === "editor" && (
-    <EditorModal
-      key="editor"
-      isOpen={true}
-      onClose={handleEditorClose}
-      prompts={prompts}
-      onReset={() =>
-        setModalState({
-          type: "confirmReset",
-          data: { from: "settings" },
-        })
-      }
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-
-  {modalState.type === "settings" && (
-    <SettingsModal
-      key="settings"
-      isOpen={true}
-      onClose={() => setModalState({ type: null })}
-      settings={settings}
-      onSettingsChange={(newSettings) =>
-        setSettings((prev) => ({ ...prev, ...newSettings }))
-      }
-      isMuted={isMuted}
-      onMuteToggle={handleToggleMute}
-      onEditPrompts={() =>
-        setModalState({
-          type: "editor",
-          data: { from: "settings" },
-        })
-      }
-      onResetPrompts={() => setModalState({ type: "confirmReset" })}
-      onThemeChange={handleThemeChange}
-      currentTheme={currentTheme}
-      userId={userId}
-      onRestart={() => setModalState({ type: "confirmRestart" })}
-      onQuit={() => setModalState({ type: "confirmQuit" })}
-      activeVisualTheme={activeVisualTheme}
-      reducedMotion={prefersReducedMotion}
-      onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)}
-    />
-  )}
-
-  {modalState.type === "confirmReset" && (
-    <ConfirmModal
-      key="confirm-reset"
-      isOpen={true}
-      onClose={() => {
-        setModalState({
-          type:
-            modalState.data?.from === "settings" ? "editor" : "settings",
-          data: { from: "settings" },
-        });
-      }}
-      onConfirm={handleConfirmReset}
-      title="Confirm Reset"
-      message="Are you sure? This will replace all prompts with the defaults."
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-
-  {modalState.type === "confirmRestart" && (
-    <ConfirmModal
-      key="confirm-restart"
-      isOpen={true}
-      onClose={() => setModalState({ type: "settings" })}
-      onConfirm={handleRestartGame}
-      title="Confirm Restart"
-      message="Are you sure? This will restart the game and reset all progress."
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-
-  {modalState.type === "confirmQuit" && (
-    <ConfirmModal
-      key="confirm-quit"
-      isOpen={true}
-      onClose={() => setModalState({ type: "settings" })}
-      onConfirm={handleQuitGame}
-      title="Confirm Quit"
-      message="Are you sure you want to quit? All progress will be lost."
-      activeVisualTheme={activeVisualTheme}
-    />
-  )}
-</AnimatePresence>
-      {/* ...Turn Banner + Modal Layer (above) ... */}
-    </MotionConfig>
-  </div>
-);
+                <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
+                    {renderContent()}
+                </div>
+                
+                <AnimatePresence initial={false}>
+                {modalState.type === "extremeIntro" && (
+                    <>
+                    <ExtremeIntroEffect key={`introfx-${currentTheme}`} theme={currentTheme} reducedMotion={prefersReducedMotion} />
+                    <ExtremeIntroModal isOpen={true} onClose={handleExtremeIntroClose} activeVisualTheme={activeVisualTheme} />
+                    </>
+                )}
+                {modalState.type === "prompt" && (
+                    <PromptModal key="prompt" isOpen={true} onClose={handlePromptModalClose} onRefuse={handleRefuse} prompt={modalState.data} activeVisualTheme={activeVisualTheme} />
+                )}
+                {modalState.type === "consequence" && (
+                    <ConsequenceModal key="consequence" isOpen={true} onClose={handleConsequenceClose} text={modalState.data.text} activeVisualTheme={activeVisualTheme} />
+                )}
+                {modalState.type === "editor" && (
+                    <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
+                )}
+                {modalState.type === "settings" && (
+                    <SettingsModal key="settings" isOpen={true} onClose={() => setModalState({ type: null })} settings={settings} onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))} isMuted={isMuted} onMuteToggle={handleToggleMute} onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })} onResetPrompts={() => setModalState({ type: "confirmReset" })} onThemeChange={handleThemeChange} currentTheme={currentTheme} userId={userId} onRestart={() => setModalState({ type: "confirmRestart" })} onQuit={() => setModalState({ type: "confirmQuit" })} activeVisualTheme={activeVisualTheme} reducedMotion={prefersReducedMotion} onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)} />
+                )}
+                {modalState.type === "confirmReset" && (
+                    <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
+                )}
+                {modalState.type === "confirmRestart" && (
+                    <ConfirmModal key="confirm-restart" isOpen={true} onClose={() => setModalState({ type: "settings" })} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />
+                )}
+                {modalState.type === "confirmQuit" && (
+                    <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings" })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
+                )}
+                </AnimatePresence>
+            </MotionConfig>
+        </div>
+    );
 }
+
 export default App;
+
