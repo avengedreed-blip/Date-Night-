@@ -849,13 +849,10 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     const finalizeSpin = useCallback(() => {
         const rotation = rotationRef.current % 360;
         const sliceAngle = 360 / CATEGORIES.length;
-        // Align logical rotation direction with the canvas drawing arc
         const correctedRotation = (rotation + getPointerOffsetFromCss()) % 360;
-        // Apply half-slice phase shift for perfect pointer centering
-        const effectiveAngle = (correctedRotation + sliceAngle / 2) % 360;
-        // Compute correct slice index
+        // Subtract half a slice to align the pointer tip with the actual slice center
+        const effectiveAngle = (correctedRotation - sliceAngle / 2 + 360) % 360;
         const sliceIndex = Math.floor(effectiveAngle / sliceAngle);
-        // Normalize the winner
         const winner = CATEGORIES[sliceIndex % CATEGORIES.length].toLowerCase();
         onSpinFinish(winner);
     }, [onSpinFinish]);
