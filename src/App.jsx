@@ -896,9 +896,9 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
 
         // Release lock and notify parent component
         spinLock.current = false;
-        setIsSpinInProgress(false);
+        // setIsSpinInProgress is now handled by prompt queue
         
-    }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
+    }, [finalizeSpin, playWheelStop]);
 
 
     const handleSpin = useCallback(() => {
@@ -1533,15 +1533,37 @@ function App() {
         });
     }, []);
     
-    /* --- PROMPT QUEUE FAILSAFE --- */
+    /* --- PROMPT SEQUENCE FIX --- */
+    /* --- PROMPT RELIABILITY HARDENING --- */
     useEffect(() => {
-        if (!modalState.type && queuedPrompt) {
-            const promptTimer = setTimeout(() => {
-                safeOpenModal('prompt', queuedPrompt);
-                setQueuedPrompt(null);
-            }, 100); // Small delay to allow UI to settle
-            return () => clearTimeout(promptTimer);
+        let promptTimer = null;
+        let backupTimer = null;
+
+        if (queuedPrompt && !modalState.type) {
+            promptTimer = setTimeout(() => {
+                // Re-check conditions before opening.
+                if (queuedPrompt && !modalState.type) {
+                    safeOpenModal('prompt', queuedPrompt);
+                    setIsSpinInProgress(false); // Release spin lock ONLY after prompt is shown
+                    setQueuedPrompt(null);
+                }
+            }, 100);
+
+            // Backup timer to force prompt if it gets stuck
+            backupTimer = setTimeout(() => {
+                if (queuedPrompt && !modalState.type) {
+                    console.warn('Backup prompt trigger fired.');
+                    safeOpenModal('prompt', queuedPrompt);
+                    setIsSpinInProgress(false);
+                    setQueuedPrompt(null);
+                }
+            }, 2000);
         }
+
+        return () => {
+            clearTimeout(promptTimer);
+            clearTimeout(backupTimer);
+        };
     }, [modalState.type, queuedPrompt, safeOpenModal]);
 
     // Handle secret love round prompt
@@ -1758,9 +1780,10 @@ function App() {
         const text = pickPrompt(category, validList);
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
+        /* --- PROMPT SEQUENCE FIX --- */
         const finalizationTimer = setTimeout(() => {
             setQueuedPrompt({ title, text });
-            setIsSpinInProgress(false);
+            // setIsSpinInProgress(false) is now handled by the prompt queue useEffect
         }, 600); // Wait for pointer to settle
         return () => clearTimeout(finalizationTimer);
     }, [prompts, isExtremeMode, pickPrompt]);
@@ -1823,7 +1846,8 @@ function App() {
 
         if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
         
-        const canSpin = !isSpinInProgress && !modalState.type && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
+        /* --- PROMPT SEQUENCE FIX --- */
+        const canSpin = !isSpinInProgress && !modalState.type && !queuedPrompt && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
 
         return (
             <AnimatePresence mode="wait" initial={false}>
