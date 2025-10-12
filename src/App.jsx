@@ -848,14 +848,21 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         }
     }, [drawWheel]);
     
+    /* --- FIXED WHEEL WINNER CALCULATION --- */
     const finalizeSpin = useCallback(() => {
-        const rotation = rotationRef.current % 360;
+        const rotation = rotationRef.current;
+        const pointerOffset = getPointerOffsetFromCss();
         const sliceAngle = 360 / CATEGORIES.length;
-        const correctedRotation = (rotation + getPointerOffsetFromCss()) % 360;
-        // Subtract half a slice to align the pointer tip with the actual slice center
-        const effectiveAngle = (correctedRotation - sliceAngle / 2 + 360) % 360;
-        const sliceIndex = Math.floor(effectiveAngle / sliceAngle);
-        const winner = CATEGORIES[sliceIndex % CATEGORIES.length].toLowerCase();
+        const epsilon = 0.0001; // To prevent floating point issues at boundaries
+
+        // Normalize the final rotation. Use negative because the wheel spins clockwise.
+        // Add pointer offset and 360 to ensure the modulo result is always positive.
+        const normalizedAngle = (-rotation + pointerOffset + 360) % 360;
+        
+        // Calculate the slice index using Math.round for nearest-slice logic.
+        const sliceIndex = Math.round((normalizedAngle + epsilon) / sliceAngle) % CATEGORIES.length;
+        
+        const winner = CATEGORIES[sliceIndex].toLowerCase();
         onSpinFinish(winner);
     }, [onSpinFinish]);
 
@@ -1375,6 +1382,7 @@ function App() {
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiOrigin, setConfettiOrigin] = useState({x: 0.5, y: 0.5 });
     const [isSpinInProgress, setIsSpinInProgress] = useState(false);
+    const [queuedPrompt, setQueuedPrompt] = useState(null);
     const [pendingExtremeRound, setPendingExtremeRound] = useState(null);
     const [audioInitFailed, setAudioInitFailed] = useState(false);
     const [gameState, setGameState] = useState('unlock');
@@ -1475,6 +1483,14 @@ function App() {
         });
     }, []);
     
+    /* --- PROMPT QUEUE FAILSAFE --- */
+    useEffect(() => {
+        if (!modalState.type && queuedPrompt) {
+            safeOpenModal('prompt', queuedPrompt);
+            setQueuedPrompt(null);
+        }
+    }, [modalState.type, queuedPrompt, safeOpenModal]);
+
     useEffect(() => { 
         if (window.Tone) { 
             setScriptLoadState('loaded'); 
@@ -1660,10 +1676,10 @@ function App() {
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
         setTimeout(() => {
-            safeOpenModal('prompt', { title, text });
+            setQueuedPrompt({ title, text });
             setIsSpinInProgress(false);
         }, 600);
-    }, [prompts, isExtremeMode, pickPrompt, safeOpenModal]);
+    }, [prompts, isExtremeMode, pickPrompt]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -1856,4 +1872,3 @@ function App() {
 }
 
 export default App;
-
