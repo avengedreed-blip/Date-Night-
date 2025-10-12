@@ -670,13 +670,6 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const getPointerOffsetFromCss = () => {
-    const el = document.getElementById('app-container') || document.documentElement;
-    const val = getComputedStyle(el).getPropertyValue('--pointer-tilt') || '0deg';
-    const n = parseFloat(val);
-    return Number.isFinite(n) ? n : 0;
-};
-
 const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion }) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
@@ -874,127 +867,130 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     /* --- FIXED WHEEL WINNER CALCULATION --- */
     const finalizeSpin = useCallback(() => {
         const rotation = rotationRef.current;
-        const pointerOffset = getPointerOffsetFromCss();
         const sliceAngle = 360 / CATEGORIES.length;
-        const epsilon = 0.0001; // To prevent floating point issues at boundaries
 
-        // Normalize the final rotation. Use negative because the wheel spins clockwise.
-        // Add pointer offset and 360 to ensure the modulo result is always positive.
-        const normalizedAngle = (-rotation + pointerOffset + 360) % 360;
-        
-        // Calculate the slice index using Math.round for nearest-slice logic.
-        const sliceIndex = Math.round((normalizedAngle + epsilon) / sliceAngle) % CATEGORIES.length;
-        
+        // Normalize the final rotation. Use negative because wheel spins clockwise.
+        // Add 90 degrees to treat top as the 0-point, then 360 for positive modulo.
+        const normalizedAngle = (-rotation + 90 + 360) % 360;
+
+        // Use floor division to find the slice index.
+        const sliceIndex = Math.floor(normalizedAngle / sliceAngle) % CATEGORIES.length;
+
         const winner = CATEGORIES[sliceIndex].toLowerCase();
         onSpinFinish(winner);
     }, [onSpinFinish]);
 
+    /* --- GUARANTEED SPIN FINALIZATION --- */
+    const finishSpinNow = useCallback(() => {
+        if (!spinLock.current) return; // Already finalized or never started
+
+        playWheelStop();
+        
+        // Finalize winner selection
+        finalizeSpin();
+        
+        // Update UI states
+        setIsSpinning(false);
+        setIsPointerSettling(true);
+        setTimeout(() => setIsPointerSettling(false), 500);
+
+        // Release lock and notify parent component
+        spinLock.current = false;
+        setIsSpinInProgress(false);
+        
+    }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
+
+
     const handleSpin = useCallback(() => {
         const now = Date.now();
-        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 1000) {
+        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) { // increased debounce
             return;
         }
         lastSpinTimeRef.current = now;
+        spinLock.current = true; // Acquire lock
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
+        
+        setIsSpinning(true);
+        setIsSpinInProgress(true);
+        playWheelSpinStart();
 
-        requestAnimationFrame(() => {
-            if (spinLock.current) return;
-            spinLock.current = true;
+        const failsafeTimer = setTimeout(() => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+            }
+            console.warn('Failsafe spin timer triggered. Finalizing spin now.');
+            // Settle at a random final spot for visual consistency
+            rotationRef.current += (Math.random() * 180 - 90); 
+            if(wheelCanvasRef.current) wheelCanvasRef.current.style.transform = `rotate(${rotationRef.current}deg)`;
+            finishSpinNow();
+        }, 7000);
+
+        if (reducedMotion) {
+            const startAngle = rotationRef.current % 360;
+            const spinDegrees = 360 + Math.random() * 360;
+            const targetAngle = startAngle + spinDegrees;
             
-            setIsSpinning(true);
-            setIsSpinInProgress(true);
-            playWheelSpinStart();
+            rotationRef.current = targetAngle;
+            if (wheelCanvasRef.current) {
+                wheelCanvasRef.current.style.transition = 'transform 0.5s ease-out';
+                wheelCanvasRef.current.style.transform = `rotate(${targetAngle}deg)`;
+            }
 
-            const failsafeTimer = setTimeout(() => {
-                if (spinLock.current) {
-                    console.warn('Failsafe spin reset triggered.');
-                    spinLock.current = false;
-                    setIsSpinning(false);
-                    setIsSpinInProgress(false);
-                    if (animationFrameRef.current) {
-                        cancelAnimationFrame(animationFrameRef.current);
-                        animationFrameRef.current = null;
-                    }
-                }
-            }, 7000);
+            playWheelTick();
+            setTimeout(() => playWheelTick(), 80);
 
-            if (reducedMotion) {
+            setTimeout(() => {
                 clearTimeout(failsafeTimer);
-                const startAngle = rotationRef.current % 360;
-                const spinDegrees = 360 + Math.random() * 360;
-                const targetAngle = startAngle + spinDegrees;
-                
-                rotationRef.current = targetAngle;
-                if (wheelCanvasRef.current) {
-                    wheelCanvasRef.current.style.transition = 'transform 0.5s ease-out';
-                    wheelCanvasRef.current.style.transform = `rotate(${targetAngle}deg)`;
-                }
+                finishSpinNow();
+            }, 500);
+            return;
+        }
 
-                playWheelTick();
-                setTimeout(() => playWheelTick(), 80);
+        const rand = Math.random();
+        const duration = 4500 + rand * 1000;
+        const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+        const start = performance.now();
+        const startAngle = rotationRef.current % 360;
+        const spinDegrees = 7200 + rand * 3600;
+        const targetAngle = startAngle + spinDegrees;
+        let lastTickAngle = startAngle;
 
-                setTimeout(() => {
-                    playWheelStop();
-                    setIsPointerSettling(true);
-                    finalizeSpin();
-                    
-                    setTimeout(() => {
-                        setIsSpinning(false);
-                        setIsSpinInProgress(false);
-                        spinLock.current = false;
-                        if(wheelCanvasRef.current) wheelCanvasRef.current.style.transition = '';
-                    }, 500);
-                }, 500);
+        const animate = (now) => {
+            if (!spinLock.current) { // Stop if already finalized by failsafe
+                clearTimeout(failsafeTimer);
+                if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
                 return;
             }
 
-            const rand = Math.random();
-            const duration = 4500 + rand * 1000;
-            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-            const start = performance.now();
-            const startAngle = rotationRef.current % 360;
-            const spinDegrees = 7200 + rand * 3600;
-            const targetAngle = startAngle + spinDegrees;
-            let lastTickAngle = startAngle;
+            const elapsed = now - start;
+            const t = Math.min(elapsed / duration, 1);
+            const eased = easeOutCubic(t);
+            const currentAngle = startAngle + eased * spinDegrees;
+            
+            if(wheelCanvasRef.current) wheelCanvasRef.current.style.transform = `rotate(${currentAngle}deg)`;
+            rotationRef.current = currentAngle; // Update ref continuously for failsafe
 
-            const animate = (now) => {
-                if (!wheelCanvasRef.current) {
-                    clearTimeout(failsafeTimer);
-                    animationFrameRef.current = null;
-                    spinLock.current = false;
-                    return;
-                }
+            const TICK_DEGREES = 360 / CATEGORIES.length / 2;
+            if (currentAngle - lastTickAngle >= TICK_DEGREES) {
+                playWheelTick();
+                lastTickAngle += TICK_DEGREES;
+            }
 
-                const elapsed = now - start;
-                const t = Math.min(elapsed / duration, 1);
-                const eased = easeOutCubic(t);
-                const currentAngle = startAngle + eased * spinDegrees;
-                
-                wheelCanvasRef.current.style.transform = `rotate(${currentAngle}deg)`;
+            if (t < 1) {
+                animationFrameRef.current = requestAnimationFrame(animate);
+            } else {
+                clearTimeout(failsafeTimer);
+                animationFrameRef.current = null;
+                rotationRef.current = targetAngle;
+                finishSpinNow();
+            }
+        };
+        animationFrameRef.current = requestAnimationFrame(animate);
+    }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress]);
 
-                const TICK_DEGREES = 360 / CATEGORIES.length / 2;
-                if (currentAngle - lastTickAngle >= TICK_DEGREES) {
-                    playWheelTick();
-                    lastTickAngle += TICK_DEGREES;
-                }
-
-                if (t < 1) {
-                    animationFrameRef.current = requestAnimationFrame(animate);
-                } else {
-                    clearTimeout(failsafeTimer);
-                    animationFrameRef.current = null;
-                    rotationRef.current = targetAngle;
-                    playWheelStop();
-                    setIsSpinning(false);
-                    setIsPointerSettling(true);
-                    finalizeSpin();
-                    spinLock.current = false;
-                }
-            };
-            animationFrameRef.current = requestAnimationFrame(animate);
-        });
-    }, [canSpin, setIsSpinInProgress, playWheelSpinStart, playWheelTick, playWheelStop, finalizeSpin, reducedMotion]);
 
     return (
         <div className="wheel-container" role="img" aria-label="Game wheel">
@@ -1540,8 +1536,11 @@ function App() {
     /* --- PROMPT QUEUE FAILSAFE --- */
     useEffect(() => {
         if (!modalState.type && queuedPrompt) {
-            safeOpenModal('prompt', queuedPrompt);
-            setQueuedPrompt(null);
+            const promptTimer = setTimeout(() => {
+                safeOpenModal('prompt', queuedPrompt);
+                setQueuedPrompt(null);
+            }, 100); // Small delay to allow UI to settle
+            return () => clearTimeout(promptTimer);
         }
     }, [modalState.type, queuedPrompt, safeOpenModal]);
 
@@ -1580,17 +1579,21 @@ function App() {
     useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted]);
     
     useEffect(() => {
-        const t = isExtremeMode ? 'crimsonFrenzy' : currentTheme;
+        let t = currentTheme;
+        if(isExtremeMode) t = 'crimsonFrenzy';
+        else if (gameState === 'secretLoveRound') t = 'lavenderPromise';
+
         if (t !== backgroundTheme) {
             setPrevBackgroundClass(activeBackgroundClass);
             setActiveBg(prev => (prev === 1 ? 2 : 1));
             setBackgroundTheme(t);
         }
-    }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass]);
+    }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass, gameState]);
 
 
     const handleThemeChange = useCallback((themeId) => {
         if (currentTheme !== themeId) {
+            previousThemeRef.current = currentTheme;
             setCurrentTheme(themeId);
             audioEngine.startTheme(themeId);
         }
@@ -1606,11 +1609,12 @@ function App() {
         }
         setShowPowerSurge(true);
         audioEngine.playExtremePrompt();
+        previousThemeRef.current = currentTheme;
         audioEngine.startTheme('crimsonFrenzy');
         setShowConfetti(true);
         setExtremeRoundSource(source);
         safeOpenModal('extremeIntro');
-    }, [safeOpenModal]);
+    }, [safeOpenModal, currentTheme]);
 
     useEffect(() => { 
         if (!isSpinInProgress && !modalState.type && pendingExtremeRound) { 
@@ -1666,19 +1670,18 @@ function App() {
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const currentPlayerName = players[nextPlayerId];
 
-        if (currentPlayerName?.toLowerCase() === 'katy' && !localStorage.getItem('secretLoveRoundShown') && Math.random() < 0.18) {
-            localStorage.setItem('secretLoveRoundShown', 'true');
-            previousThemeRef.current = currentTheme;
+        // --- SECRET ROUND TRIGGER LOGIC (KATY random chance each round) ---
+        if (gameState !== 'secretLoveRound' && currentPlayerName?.toLowerCase() === 'katy' && Math.random() < 0.18) {
             setCurrentPlayer(nextPlayerId);
             setGameState('secretLoveRound');
             handleThemeChange('lavenderPromise');
             return;
         }
 
-        if (isExtremeMode) {
+        if (isExtremeMode || gameState === 'secretLoveRound') {
             setIsExtremeMode(false);
             setExtremeRoundSource(null);
-            handleThemeChange(previousThemeRef.current);
+            handleThemeChange(previousThemeRef.current || 'velourNights');
         }
 
         const newRoundCount = roundCount + 1;
@@ -1708,7 +1711,7 @@ function App() {
                 triggerExtremeRound('random');
             }
         }
-    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange]);
+    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange, gameState]);
 
     const handleCloseModal = useCallback(() => { 
         audioEngine.playModalClose(); 
@@ -1727,9 +1730,8 @@ function App() {
 
     const handleSecretLoveRoundClose = useCallback(() => {
         setModalState({ type: null, data: {} });
-        handleThemeChange(previousThemeRef.current);
         endRoundAndStartNew();
-    }, [handleThemeChange, endRoundAndStartNew]);
+    }, [endRoundAndStartNew]);
 
     const handleExtremeIntroClose = useCallback(() => {
         setModalState({ type: null });
@@ -1756,10 +1758,11 @@ function App() {
         const text = pickPrompt(category, validList);
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
-        setTimeout(() => {
+        const finalizationTimer = setTimeout(() => {
             setQueuedPrompt({ title, text });
             setIsSpinInProgress(false);
-        }, 600);
+        }, 600); // Wait for pointer to settle
+        return () => clearTimeout(finalizationTimer);
     }, [prompts, isExtremeMode, pickPrompt]);
 
     const handleRefuse = useCallback(() => { 
@@ -1861,7 +1864,7 @@ function App() {
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
-                                {(gameState === 'playing' || gameState === 'extremeRound') && (
+                                {(gameState === 'playing' || gameState === 'extremeRound' || gameState === 'turnIntro') && (
                                     <div className="turn-banner">
                                         {players[currentPlayer]}'s Turn!
                                     </div>
