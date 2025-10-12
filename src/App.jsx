@@ -1,3 +1,6 @@
+/* --- PROMPT & CONSEQUENCE SYSTEM RESTORED --- */
+/* --- CUSTOM PROMPT EDITOR RETAINED & ACTIVE --- */
+/* --- REMOVED UNAUTHORIZED INTENSITY MODAL --- */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 
@@ -9,59 +12,6 @@ if (!window.Tone) window.Tone = Tone;
 if (typeof structuredClone !== "function") {
     globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
 }
-
-// --- Gemini API Helper ---
-const callGemini = async (prompt, retries = 3, delay = 1000) => {
-    const apiKey = ""; // Should be empty, handled by the environment
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-    const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
-        safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-        ],
-    };
-
-    for (let i = 0; i < retries; i++) {
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`HTTP error! status: ${response.status}, body: ${errorBody}`);
-            }
-
-            const result = await response.json();
-            const candidate = result.candidates?.[0];
-
-            if (candidate && candidate.content?.parts?.[0]?.text) {
-                // Clean up the response, removing potential markdown or quotes
-                return candidate.content.parts[0].text.replace(/["*]/g, '').trim();
-            } else if (candidate && candidate.finishReason === 'SAFETY') {
-                 console.warn("Gemini API call blocked for safety reasons.", result);
-                 return "The stars aren't aligned for that question... Try another spin!";
-            } else {
-                 throw new Error("Invalid response structure from Gemini API");
-            }
-
-        } catch (error) {
-            console.error(`Gemini API call failed (attempt ${i + 1}/${retries}):`, error);
-            if (i < retries - 1) {
-                await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
-            } else {
-                return "The cosmos are quiet... Please try spinning again.";
-            }
-        }
-    }
-};
-
 
 /**
  * audioEngine.js (Integrated) - Now exposes BPM
@@ -284,22 +234,36 @@ const publicApi = {
     return publicApi;
 })();
 
-const SparklesIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 2.25a.75.75 0 01.75.75v3a.75.75 0 01-1.5 0v-3a.75.75 0 01.75-.75zM5.05 5.05a.75.75 0 011.06 0l2.122 2.12a.75.75 0 01-1.06 1.06L5.05 6.11a.75.75 0 010-1.06zM2.25 12a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75zM5.05 18.95a.75.75 0 010-1.06l2.122-2.122a.75.75 0 011.06 1.06L6.11 18.95a.75.75 0 01-1.06 0zM12 18a.75.75 0 01.75.75v3a.75.75 0 01-1.5 0v-3A.75.75 0 0112 18zM18.95 18.95a.75.75 0 01-1.06 0l-2.122-2.12a.75.75 0 011.06-1.06l2.122 2.12a.75.75 0 010 1.06zM21.75 12a.75.75 0 01-.75.75h-3a.75.75 0 010-1.5h3a.75.75 0 01.75.75zM18.95 5.05a.75.75 0 010 1.06L16.828 8.23a.75.75 0 01-1.06-1.06l2.12-2.122a.75.75 0 011.06 0z"/>
-    </svg>
-);
 
-const useGamePrompts = () => {
-  const [prompts, setPrompts] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+// --- DATA & PROMPTS ---
+const defaultPrompts = { truthPrompts: { normal: [ "Would you remarry if your partner died?", "Do you ever regret marrying your partner?", "What's your biggest regret? Explain.", "What's your favorite thing that your partner does for you?", "What do you envision the next 50 years with your partner being like? Explain in great detail.", "Tell your partner something that they need to improve on. Go into great detail.", "What's one thing you're scared to ask me, but really want to know?", "What is a secret you've kept from your parents?", "Describe a dream you've had about me.", "If you could change one thing about our history, what would it be?", "What's the most childish thing you still do?", "What do you think is your partner's biggest strength?", "If money didn't matter, what would you want your partner to do with their life?", "What song always makes you think of your partner?", "What was your happiest childhood memory?", "What's one thing you've always wanted to tell your partner, but never have?", "What scares you most about the future with your partner?", "What's one thing you wish you and your partner could do more often?", "If you could relive one day of your relationship, which would it be?" ], spicy: [ "What's your favorite part of your partner's body?", "Describe a time they turned you on without even realizing it.", "Tell me a sexual fantasy involving us you've never shared.", "What's the most embarrassing thing that's ever happened to you during sex?", "Who's the best sexual partner you've ever had? And why?", "Name a celebrity you've had a sexual fantasy about.", "If you could only do one sex act for the rest of your life, what would it be?", "Have you ever cheated on a partner?", "Have you ever faked an orgasm with your current partner?", "Tell your partner what you're thinking about in great detail, when you're horny prior to sex.", "What's the naughtiest thought you've had about me this week?", "Rank your top three favorite positions.", "What's one thing you want me to do to you in bed more often?", "What's the sexiest dream you've ever had about your partner?", "What's the dirtiest compliment you secretly want from your partner?", "Where's the riskiest place you'd want to fool around with your partner?", "If you could make your partner wear any outfit for you, what would it be?", "What's your favorite way your partner touches you when you want it to lead to sex?", "What's a fantasy involving your partner you've never admitted out loud?", "If you could freeze time, what would you do to your partner while no one else was watching?", "What's a kink you're curious about but nervous to try with your partner?", "Which body part of your partner do you think about most when they're not around?", "What's your favorite way your partner has teased you without realizing it?" ], extreme: [ "Describe your partner's genitals in great detail.", "Which ex would you most likely allow to have a threesome with you and your partner?", "Which ex looked the best naked?", "Describe a sexual experience with an ex in great detail.", "Have you ever masturbated in an inappropriate time or place?", "What do you want to do to your partner right now? Be detailed.", "Tell your partner any ways that they can improve in bed.", "What is the biggest lie you have ever told me?", "Have you ever considered leaving me? If so, why?", "Describe the most intense orgasm you've ever had, with or without me.", "What is something you've never told anyone about your sexual history?", "Describe, in detail, your perfect sexual scenario with your partner.", "What's the nastiest thought you've ever had about your partner in public?", "If you could film yourself and your partner doing anything in bed, what would you want captured?", "What's the dirtiest porn search you've ever typed that you'd want to try with your partner?", "Which of your partner's friends have you thought about sexually (even fleetingly)?", "What's the roughest or wildest thing you secretly want your partner to do to you?", "What's your most shameful fantasy you'd never tell your partner's family?", "If you could erase one sexual experience from your past before meeting your partner, what would it be?", "What do you imagine when you masturbate that you haven't told your partner?" ] }, darePrompts: { normal: [ "Take a cute selfie with your partner.", "Give your best impression of your partner.", "Let your partner tickle you for 30 seconds.", "Give your partner a shoulder rub for 3 minutes.", "Do a somersault.", "Do 10 jumping jacks.", "Give your partner a hug, as if they were dying.", "Post a picture of your partner on social media with a loving caption.", "Let your partner draw a temporary tattoo on you with a pen.", "Serenade your partner with a love song, even if you can't sing.", "Do your best runway walk for your partner.", "Take a silly selfie right now and show your partner.", "Speak in an accent for the next 2 rounds with your partner.", "Tell your partner two truths and a lie.", "Share your screen time stats with your partner.", "Do your best dance move for your partner for 20 seconds.", "Hug a pillow and pretend it's your partner for one minute.", "Let your partner pick a silly nickname for you for the rest of the game.", "Text a random emoji to a friend and show your partner the reply.", "Sing your favorite chorus from memory to your partner.", "Pretend to be your partner for one round." ], spicy: [ "Give me a passionate kiss, as if we haven't seen each other in a month.", "Whisper what you want to do to me later tonight in my ear.", "Gently remove one item of my clothing.", "Sit in your partner's lap for 3 rounds.", "Touch your partner through their clothes until they're aroused.", "Take a sexy selfie in only your underwear and send it to your partner.", "Flash your partner a private part of your choosing.", "Explain in graphic detail how you like to masturbate.", "Give your partner a topless lap dance.", "Gently kiss your partner's naked genitals.", "Let me choose an item of your clothing for you to remove.", "Give your partner a hickey somewhere they can hide it.", "Describe how you would tease me if we were in public right now.", "Describe out loud how you'd undress your partner right now.", "Let your partner choose a body part for you to kiss.", "Show your partner how you'd seduce them in public without anyone noticing.", "Whisper something filthy in your partner's ear.", "Stroke your partner's hand or arm like you would in foreplay.", "Show your partner your sexiest facial expression.", "Bite your lip and hold eye contact with your partner for 30 seconds.", "Kiss your partner as if it were your first time.", "Moan your partner's name in a way that turns them on." ], extreme: [ "Give your partner a hand job for 3 minutes.", "Sit on your partner's face, or let them sit on your face for 3 minutes.", "Soak for 5 minutes.", "Masturbate for 5 minutes while watching porn that your partner picked.", "Edge your partner twice.", "Perform oral sex on your partner for 2 minutes.", "Use a sex toy on your partner for 3 minutes.", "Allow your partner to use any sex toy they'd like on your for the next 5 minutes.", "Wear a butt plug for the next 10 minutes.", "Let your partner tie you up for 5 minutes and do what they want.", "Roleplay a fantasy of your partner's choosing for 5 minutes.", "Take a nude photo and send it to your partner right now.", "Lick or suck on a body part your partner chooses.", "Let your partner spank you as hard as they want 5 times.", "Send your partner a dirty voice note moaning their name.", "Simulate oral sex on your fingers for 30 seconds in front of your partner.", "Strip completely naked and pose however your partner says.", "Show your partner how you masturbate, in detail.", "Act out your favorite porn scene with your partner.", "Put something of your partner's in your mouth and treat it like foreplay.", "Let your partner tie your hands for the next 3 rounds.", "Edge yourself while your partner watches for 2 minutes.", "Edge your partner while you watch for 2 minutes." ] }, triviaQuestions: { normal: [ "What is your partner's birthday?", "What is your partner's favorite show?", "What is their biggest insecurity?", "What is your partner's biggest fear?", "What is their dream job if money were no object?", "What is one thing your partner has always wanted to try but hasn't yet?", "What is the first gift you gave each other?", "What is your partner's favorite childhood cartoon?", "What is the name of your partner's first pet?", "What is your partner's favorite board game?", "Would you rather go into the past and meet your ancestors or go into the future and meet your great-great grandchildren?", "What was their favorite band in high school?", "What do they love most about themselves?", "What do they love the most about you?", "What's my favorite animal?", "If they could haunt anyone as a ghost, who would it be?", "What is their dream vacation?", "What accomplishment are they most proud of?", "What historical figure would they most want to have lunch with?", "What is their least favorite food?", "What's your partner's go-to comfort food?", "What movie does your partner always want to rewatch?", "What's your partner's biggest pet peeve?", "Which holiday does your partner love the most?", "What's your partner's dream car?", "What color does your partner secretly dislike wearing?", "Who was your partner's first celebrity crush?", "What's your partner's most annoying habit (to you)?", "If your partner could instantly master one skill, what would it be?" ] }, consequences: { normal: [ "You have to call your partner a name of their choosing for the rest of the game.", "Every wrong answer for the rest of the game gets you tickled for 20 seconds.", "Go get your partner a drink.", "Make your partner a snack.", "You have to end every sentence with 'my love' for the next 3 rounds.", "Give your partner your phone and let them send one playful text to anyone.", "Compliment your partner 5 times in a row.", "Give your partner control of the TV remote tonight.", "Swap seats with your partner for the next round.", "Tell your partner a secret you've never told them.", "Let your partner take an unflattering picture of you.", "You can only answer your partner with 'yes, my love' until your next turn.", "Wear a silly hat (or make one) until the game ends with your partner.", "Post a sweet compliment about your partner on social media." ], spicy: [ "Play the next 3 rounds topless.", "For the next 5 rounds, every time it's your turn, you have to start by kissing your partner.", "Your partner gets to give you one command, and you must obey.", "Play the next 3 rounds bottomless.", "Every wrong answer or refusal requires you to send your partner a nude picture for the rest of the game. Even your partner's wrong answers.", "Remove an article of clothing each round for the remainder of the game.", "Do ten jumping jacks completely naked.", "Swap clothes with your partner for the remainder of the game.", "Your partner gets to spank you, as hard as they want, 5 times.", "Kiss your partner somewhere unexpected.", "Tell your partner your dirtiest thought in the last 24 hours.", "For the next round, sit on your partner's lap.", "Let your partner bite or nibble a place of their choice.", "You have to let your partner mark you with lipstick or a marker.", "Show your partner your favorite sex position (with clothes on).", "Tease your partner without kissing for 1 minute.", "Send your partner a sexy text right now while sitting next to them.", "Give your partner a 1-minute lap dance." ], extreme: [ "Wear a butt plug for the remainder of the game.", "Record yourself masturbating right now and send it to your partner.", "Use a sex toy of your partner's choosing for the remainder of the game.", "Edge yourself for the remainder of the game.", "Allow your partner to act out a fantasy of theirs, and you can't say no.", "You must perform any sexual act your partner demands, right now.", "Send your partner the filthiest nude you've ever taken.", "Use your tongue on any body part your partner picks.", "Strip completely and stay that way until the round ends with your partner.", "Let your partner spank or choke you until they're satisfied.", "Put on a show of how you like to be touched for your partner.", "Allow your partner to record 30 seconds of you doing something sexual.", "Play with a toy in front of your partner right now.", "Moan out loud for 1 minute straight for your partner.", "Let your partner pick your sexual punishment and don't complain." ] } };
 
-  // This hook is now a placeholder. Gemini generates prompts dynamically.
-  // Kept for potential future use with saving/loading custom prompt sets.
-  const updatePrompts = (newPrompts) => setPrompts(newPrompts);
-  const resetPrompts = () => setPrompts({});
+const useLocalStoragePrompts = () => {
+  const [prompts, setPrompts] = useState(() => {
+    try {
+      const stored = localStorage.getItem("prompts");
+      return stored ? JSON.parse(stored) : defaultPrompts;
+    } catch {
+      return defaultPrompts;
+    }
+  });
 
-  return { prompts, updatePrompts, resetPrompts, isLoading };
+  const updatePrompts = (newPrompts) => {
+    setPrompts(newPrompts);
+    localStorage.setItem("prompts", JSON.stringify(newPrompts));
+  };
+
+  const resetPrompts = () => {
+    setPrompts(defaultPrompts);
+    localStorage.setItem("prompts", JSON.stringify(defaultPrompts));
+  };
+
+  return {
+    prompts,
+    updatePrompts,
+    resetPrompts,
+    isLoading: false,
+  };
 };
 
 const useParallax = (strength = 10) => {
@@ -1228,42 +1192,17 @@ const ExtremeIntroModal = ({ isOpen, onClose, activeVisualTheme }) => (
     </Modal>
 );
 
-const PromptModal = ({ isOpen, onClose, onRefuse, prompt: initialPrompt, activeVisualTheme }) => {
-    const [currentPrompt, setCurrentPrompt] = useState(initialPrompt);
-    const [isRegenerating, setIsRegenerating] = useState(false);
-
-    useEffect(() => {
-        setCurrentPrompt(initialPrompt);
-    }, [initialPrompt]);
-    
-    const handleToneShift = async (tone) => {
-        setIsRegenerating(true);
-        const geminiPrompt = `You are a creative prompt generator for a romantic couples game. Rewrite the following "${currentPrompt.category}" prompt to have a "${tone}" tone. Keep the core idea but change the phrasing. Be concise and direct. Do not add any extra conversational text or markdown. The prompt is: "${currentPrompt.text}"`;
-        const newText = await callGemini(geminiPrompt);
-        setCurrentPrompt(prev => ({ ...prev, text: newText }));
-        setIsRegenerating(false);
-    };
-
-    return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isRegenerating ? "Shifting the Vibe..." : currentPrompt.title} activeVisualTheme={activeVisualTheme}>
+const PromptModal = ({ isOpen, onClose, onRefuse, prompt, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title={prompt.title} activeVisualTheme={activeVisualTheme}>
         <div className="text-center flex flex-col gap-6">
-            <div className="min-h-[6rem] flex items-center justify-center">
-                {isRegenerating ? <SpinLoader/> : <p className="text-2xl font-semibold leading-relaxed text-white">{currentPrompt.text}</p>}
-            </div>
-            
-            <div className="flex flex-col gap-3">
-                 <div className="grid grid-cols-2 gap-3">
-                    <motion.button onClick={() => handleToneShift('spicier')} disabled={isRegenerating} className="btn btn--gemini text-sm" whileTap={{ scale: 0.95 }}>✨ Make it Spicier</motion.button>
-                    <motion.button onClick={() => handleToneShift('deeper and more romantic')} disabled={isRegenerating} className="btn btn--gemini text-sm" whileTap={{ scale: 0.95 }}>✨ Make it Deeper</motion.button>
-                </div>
-                <div className="flex gap-4">
-                    <motion.button onClick={onClose} className="btn btn--primary flex-1" whileTap={{ scale: 0.95 }}>Done</motion.button>
-                    <motion.button onClick={onRefuse} className="btn btn--secondary flex-1" whileTap={{ scale: 0.95 }}>Refuse</motion.button>
-                </div>
+            <p className="text-2xl font-semibold leading-relaxed text-white">{prompt.text}</p>
+            <div className="flex gap-4">
+                <motion.button onClick={onClose} className="btn btn--primary flex-1" whileTap={{ scale: 0.95 }}>Done</motion.button>
+                <motion.button onClick={onRefuse} className="btn btn--secondary flex-1" whileTap={{ scale: 0.95 }}>Refuse</motion.button>
             </div>
         </div>
     </Modal>
-)};
+);
 
 const ConsequenceModal = ({ isOpen, onClose, text, activeVisualTheme }) => (
     <Modal isOpen={isOpen} onClose={onClose} title="Consequence" activeVisualTheme={activeVisualTheme}>
@@ -1308,7 +1247,6 @@ const EditorModal = ({ isOpen, onClose, prompts: initialPrompts, onReset, active
     return (
         <Modal isOpen={isOpen} onClose={handleSave} title="Edit Prompts" activeVisualTheme={activeVisualTheme} customClasses="max-w-lg">
             <div className="flex flex-col gap-4 text-white">
-                <p className="text-sm text-center text-white/60 -mt-2">Note: Edits only apply if Gemini prompts are disabled.</p>
                 <div ref={scrollRef} onScroll={handleScroll} className="editor-scroll-area pr-2" data-at-top={isAtTop} data-at-bottom={isAtBottom}>
                 {Object.entries(prompts).map(([category, types]) => (
                     <div key={category} className="mb-6">
@@ -1371,7 +1309,7 @@ const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, o
             </div>
             <div className="settings-section">
                 <h3 className="text-xl font-bold mb-3 text-[var(--theme-label)]">Game</h3>
-                 <button onClick={onEditPrompts} className="btn--inline w-full flex items-center justify-center gap-2" disabled><CustomPromptIcon /> Edit Custom Prompts (Disabled)</button>
+                 <button onClick={onEditPrompts} className="btn--inline w-full flex items-center justify-center gap-2"><CustomPromptIcon /> Edit Custom Prompts</button>
                  <div className="flex items-center justify-between mt-3">
                      <label htmlFor="reduced-motion">Reduced Motion</label>
                      <input type="checkbox" id="reduced-motion" checked={reducedMotion} onChange={onReducedMotionToggle} className="w-5 h-5 rounded text-[var(--theme-highlight)] bg-white/10 border-white/20 focus:ring-[var(--theme-highlight)]" />
@@ -1415,7 +1353,7 @@ const getInitialSettings = () => {
 };
 
 function App() {
-    const { prompts, updatePrompts, resetPrompts } = useGamePrompts();
+    const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     const [modalState, setModalState] = useState({ type: null, data: {} });
@@ -1442,6 +1380,7 @@ function App() {
     const [gameState, setGameState] = useState('unlock');
     const [players, setPlayers] = useState({ p1: 'Player 1', p2: 'Player 2' });
     const [currentPlayer, setCurrentPlayer] = useState('p1');
+    const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const mainContentRef = useRef(null);
     const turnIntroTimeoutRef = useRef(null);
     
@@ -1704,41 +1643,40 @@ function App() {
             setTimeout(() => setPulseLevel(0), 1000);
         }
     }, [extremeRoundSource, roundCount]);
+
+    const pickPrompt = useCallback((category, list) => {
+        const recent = recentPrompts[category] || [];
+        const available = list.filter(p => !recent.includes(p));
+        const choice = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : list[Math.floor(Math.random() * list.length)] || 'No prompts available.';
+        setRecentPrompts(prev => ({ ...prev, [category]: [...recent.slice(-4), choice] }));
+        return choice;
+    }, [recentPrompts]);
     
-    const handleSpinFinish = useCallback(async (category) => {
+    const handleSpinFinish = useCallback((category) => {
+        const { truthPrompts, darePrompts, triviaQuestions } = prompts;
+        const list = category === 'truth' ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy]) : category === 'dare' ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy]) : [...triviaQuestions.normal];
+        const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
+        const text = pickPrompt(category, validList);
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
-        // Show modal immediately with a loading state
-        safeOpenModal('prompt', { title, text: '', category, isLoading: true });
-        setIsSpinInProgress(false);
+        setTimeout(() => {
+            safeOpenModal('prompt', { title, text });
+            setIsSpinInProgress(false);
+        }, 600);
+    }, [prompts, isExtremeMode, pickPrompt, safeOpenModal]);
 
-        const intensity = isExtremeMode ? 'extremely spicy and boundary-pushing' : 'fun, intimate, and slightly spicy';
-        const geminiPrompt = `You are a creative prompt generator for a romantic couples game called Pulse. Generate one single, short "${category}" prompt for a couple. The tone should be ${intensity}. Be direct. Do not use markdown or quotes.`;
-        
-        const generatedText = await callGemini(geminiPrompt);
-        
-        setModalState(prev => ({
-            ...prev,
-            data: { ...prev.data, text: generatedText, isLoading: false }
-        }));
-
-    }, [isExtremeMode, safeOpenModal]);
-
-    const handleRefuse = useCallback(async () => { 
+    const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
-        setModalState({ type: null }); // Close prompt modal
+        setModalState(prev => ({...prev, type: null}));
         
-        setTimeout(async () => {
-            safeOpenModal('consequence', { text: '', isLoading: true });
-            const intensity = isExtremeMode ? 'an extreme and funny' : 'a lighthearted and spicy';
-            const geminiPrompt = `For a couples game, generate one short, creative consequence for refusing a prompt. The tone should be ${intensity}.`;
-            const consequenceText = await callGemini(geminiPrompt);
-            setModalState(prev => ({
-                ...prev,
-                data: { ...prev.data, text: consequenceText, isLoading: false }
-            }));
+        const list = isExtremeMode ? [...(prompts.consequences.extreme || [])] : [...(prompts.consequences.normal || []), ...(prompts.consequences.spicy || [])]; 
+        const filteredList = list.filter(c => c && c.trim() !== ''); 
+        const text = filteredList.length > 0 ? filteredList[Math.floor(Math.random() * filteredList.length)] : "Add consequences in the editor!"; 
+        
+        setTimeout(() => {
+            safeOpenModal('consequence', { text });
         }, 50);
-    }, [isExtremeMode, safeOpenModal]);
+    }, [isExtremeMode, prompts, safeOpenModal]);
 
     const handleEditorClose = useCallback((updatedPrompts) => { 
         if (updatedPrompts) { 
@@ -1782,6 +1720,8 @@ function App() {
             exit: { x: '-100%', opacity: 0 },
             transition: { duration: 0.4, ease: 'easeInOut' }
         };
+
+        if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
         
         const canSpin = !isSpinInProgress && !modalState.type && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
 
@@ -1892,7 +1832,7 @@ function App() {
                     <PromptModal key="prompt" isOpen={true} onClose={handlePromptModalClose} onRefuse={handleRefuse} prompt={modalState.data} activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "consequence" && (
-                    <ConsequenceModal key="consequence" isOpen={true} onClose={handleConsequenceClose} text={modalState.data.isLoading ? <SpinLoader/> : modalState.data.text} activeVisualTheme={activeVisualTheme} />
+                    <ConsequenceModal key="consequence" isOpen={true} onClose={handleConsequenceClose} text={modalState.data.text} activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "editor" && (
                     <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
