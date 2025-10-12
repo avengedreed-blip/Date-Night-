@@ -894,7 +894,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         setIsPointerSettling(true);
         setTimeout(() => setIsPointerSettling(false), 500);
 
-        // Release lock and notify parent component
+        // Release lock
         spinLock.current = false;
         // setIsSpinInProgress is now handled by prompt queue
         
@@ -1538,6 +1538,7 @@ function App() {
     useEffect(() => {
         let promptTimer = null;
         let backupTimer = null;
+        let failsafeTimer = null;
 
         if (queuedPrompt && !modalState.type) {
             promptTimer = setTimeout(() => {
@@ -1560,11 +1561,21 @@ function App() {
             }, 2000);
         }
 
+        // Failsafe to release spin lock if everything stalls
+        failsafeTimer = setTimeout(() => {
+            if (isSpinInProgress && !modalState.type && !queuedPrompt) {
+                console.warn('Failsafe spin lock release triggered.');
+                setIsSpinInProgress(false);
+            }
+        }, 4000);
+
+
         return () => {
             clearTimeout(promptTimer);
             clearTimeout(backupTimer);
+            clearTimeout(failsafeTimer);
         };
-    }, [modalState.type, queuedPrompt, safeOpenModal]);
+    }, [modalState.type, queuedPrompt, safeOpenModal, isSpinInProgress]);
 
     // Handle secret love round prompt
     useEffect(() => {
