@@ -119,6 +119,21 @@ const audioEngine = (() => {
                 if(noiseFilter && noiseFilter.started) noiseFilter.stop().dispose();
             }
         };
+
+        const firstDanceReverb = new Tone.Reverb({ decay: 4, wet: 0.6 }).connect(musicChannel);
+        const firstDanceDelay = new Tone.FeedbackDelay('8n.', 0.25).connect(firstDanceReverb);
+        const firstDancePad = new Tone.AMSynth({ volume: -16, envelope: { attack: 2, release: 2 } }).connect(new Tone.Filter(1200, 'lowpass').connect(firstDanceReverb));
+        const firstDancePiano = new Tone.PolySynth(Tone.Synth, { volume: -12, oscillator: { type: 'fmtriangle' }, envelope: { attack: 0.01, release: 1.5 } }).connect(firstDanceReverb);
+        const firstDanceLead = new Tone.FMSynth({ volume: -18, harmonicity: 2, modulationIndex: 5, envelope: { attack: 0.1, decay: 0.5 } }).connect(firstDanceDelay);
+
+        themes.firstDanceMix = {
+            bpm: 72,
+            parts: [
+                new Tone.Sequence((time, note) => { firstDancePad.triggerAttackRelease(note, '1m', time); }, ['G3', 'D4', 'E4', 'C4'], '1m'),
+                new Tone.Sequence((time, notes) => { firstDancePiano.triggerAttackRelease(notes, '2n', time); }, [['G4','B4','D5'], ['D4','F#4','A4'], ['E4','G4','B4'], ['C4','E4','G4']], '2n'),
+                new Tone.Pattern((time, note) => { if(note) firstDanceLead.triggerAttackRelease(note, '8n', time); }, ['B4', 'D5', 'G5', null, 'A5', 'G5', 'E5', 'D5', null], '16n')
+            ]
+        };
     };
 
 const publicApi = {
@@ -363,7 +378,8 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
             lotusDreamscape: { num: isMobile ? 60 : 100, palette: ['#6A5ACD', '#FFFFFF', '#ADD8E6'], type: 'mote' },
             velvetCarnival: { num: isMobile ? 100 : 150, palette: ['#FFD700', '#FF4500', '#FFFFFF', '#F777B6'], type: 'confetti' },
             starlitAbyss: { num: isMobile ? 150 : 250, palette: ['#FFFFFF', '#E6E6FA', '#D8BFD8'], type: 'star' },
-            crimsonFrenzy: { num: isMobile ? 80 : 120, palette: ['#FFD700', '#DC2626', '#FF4500'], type: 'spark' }
+            crimsonFrenzy: { num: isMobile ? 80 : 120, palette: ['#FFD700', '#DC2626', '#FF4500'], type: 'spark' },
+            lavenderPromise: { num: isMobile ? 120 : 280, palette: ['#b8a1ff', '#e2d4ff', '#f2e6ff'], type: 'slowFloat' }
         };
 
         const activeConfig = themeConfig[currentTheme] || themeConfig.velourNights;
@@ -454,6 +470,13 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
                         this.baseAlpha = Math.random() * 0.5 + 0.2;
                         this.life = Math.random() * 50 + 50;
                         break;
+                    case 'slowFloat':
+                        this.radius = Math.random() * 1.5 + 0.5;
+                        this.speedX = (Math.random() - 0.5) * 0.1;
+                        this.speedY = -(Math.random() * 0.2 + 0.1);
+                        this.shadowBlur = this.radius * 5;
+                        this.baseAlpha = Math.random() * 0.4 + 0.3;
+                        break;
                     default: // mote, confetti
                         this.radius = Math.random() * (this.type === 'confetti' ? 2.5 : 1.5) + 0.5;
                         this.speedX = Math.max(-0.5, Math.min(0.5, (Math.random() - 0.5) * (0.2 + intensity * 0.4) * speedMultiplier));
@@ -496,7 +519,7 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 const color = `rgba(${this.baseColorRgb.r}, ${this.baseColorRgb.g}, ${this.baseColorRgb.b}, ${alpha})`;
                 
-                if (pulseLevel > 80) {
+                if (pulseLevel > 80 && this.type !== 'slowFloat') {
                     ctx.shadowBlur = this.radius * 6; // Streak effect
                     ctx.shadowColor = `rgba(${this.baseColorRgb.r}, ${this.baseColorRgb.g}, ${this.baseColorRgb.b}, ${alpha * 0.5})`;
                 } else {
@@ -1341,6 +1364,35 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, activeVisual
     </Modal>
 );
 
+const SecretLovePromptModal = ({ isOpen, text, onAccept, onRefuse, activeVisualTheme }) => (
+    <Modal isOpen={isOpen} onClose={onRefuse} activeVisualTheme={activeVisualTheme} title="A Question...">
+      <div className='p-6 text-center text-white'>
+        <h2 className='text-3xl font-semibold mb-4'>{text}</h2>
+        <div className='flex justify-center gap-6 mt-6'>
+          <button className='btn btn--primary' onClick={onAccept}>Accept</button>
+          <button className='btn btn--secondary' onClick={onRefuse}>Refuse</button>
+        </div>
+      </div>
+    </Modal>
+  );
+  
+  const SecretLoveMessageModal = ({ isOpen, accepted, activeVisualTheme, onClose }) => (
+    <Modal isOpen={isOpen} onClose={onClose} activeVisualTheme={activeVisualTheme}>
+      <div className='p-8 text-center text-white'>
+        <h2 className='text-3xl font-semibold mb-4'>
+          {accepted ? 'Her Forever Response ❤️' : 'Even Though You Refused… 💜'}
+        </h2>
+        <p className='text-lg leading-relaxed whitespace-pre-line'>
+          {/* TODO: Replace with your personalized message text */}
+          {accepted ? 'TODO: Acceptance message text goes here.' : 'TODO: Refusal message text goes here.'}
+        </p>
+        <div className='flex justify-center mt-6'>
+          <button className='btn btn--primary' onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </Modal>
+  );
+
 const getInitialSettings = () => {
     const defaults = {
         theme: 'velourNights',
@@ -1391,16 +1443,18 @@ function App() {
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const mainContentRef = useRef(null);
     const turnIntroTimeoutRef = useRef(null);
+    const previousThemeRef = useRef(initialSettings.theme);
     
     const visualThemes = {
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
         lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
         velvetCarnival: { bg: 'theme-velvet-carnival-bg', titleText: 'text-white', titleShadow: '#FFD700', themeClass: 'theme-velvet-carnival' },
         starlitAbyss: { bg: 'theme-starlit-abyss-bg', titleText: 'text-white', titleShadow: '#8A2BE2', themeClass: 'theme-starlit-abyss' },
-        crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' }
+        crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' },
+        lavenderPromise: { bg: 'theme-lavender-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-lavender-promise' }
     };
     const activeVisualTheme = visualThemes[currentTheme] || visualThemes.velourNights;
-    const activeBackgroundClass = visualThemes[currentTheme]?.bg || visualThemes.velourNights.bg;
+    const activeBackgroundClass = visualThemes[backgroundTheme]?.bg || visualThemes.velourNights.bg;
 
     const [prevBackgroundClass, setPrevBackgroundClass] = useState(activeBackgroundClass);
 
@@ -1490,6 +1544,15 @@ function App() {
             setQueuedPrompt(null);
         }
     }, [modalState.type, queuedPrompt, safeOpenModal]);
+
+    // Handle secret love round prompt
+    useEffect(() => {
+        if (gameState === 'secretLoveRound' && !modalState.type) {
+            const promptType = Math.random() < 0.5 ? 'truth' : 'dare';
+            const text = promptType === 'truth' ? 'Will you love Aaron forever?' : 'I dare you to love Aaron forever.';
+            setModalState({ type: 'secretLovePrompt', data: { text, promptType } });
+        }
+    }, [gameState, modalState.type]);
 
     useEffect(() => { 
         if (window.Tone) { 
@@ -1600,15 +1663,27 @@ function App() {
     const handleToggleMute = useCallback(() => setIsMuted(prev => !prev), []);
 
     const endRoundAndStartNew = useCallback(() => {
+        const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
+        const currentPlayerName = players[nextPlayerId];
+
+        if (currentPlayerName?.toLowerCase() === 'katy' && !localStorage.getItem('secretLoveRoundShown') && Math.random() < 0.18) {
+            localStorage.setItem('secretLoveRoundShown', 'true');
+            previousThemeRef.current = currentTheme;
+            setCurrentPlayer(nextPlayerId);
+            setGameState('secretLoveRound');
+            handleThemeChange('lavenderPromise');
+            return;
+        }
+
         if (isExtremeMode) {
             setIsExtremeMode(false);
             setExtremeRoundSource(null);
-            audioEngine.startTheme(currentTheme);
+            handleThemeChange(previousThemeRef.current);
         }
 
         const newRoundCount = roundCount + 1;
         setRoundCount(newRoundCount);
-        setCurrentPlayer(prev => (prev === 'p1' ? 'p2' : 'p1'));
+        setCurrentPlayer(nextPlayerId);
         setGameState('turnIntro');
         let increment = 5;
         if (newRoundCount > 10) {
@@ -1633,7 +1708,7 @@ function App() {
                 triggerExtremeRound('random');
             }
         }
-    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme]);
+    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange]);
 
     const handleCloseModal = useCallback(() => { 
         audioEngine.playModalClose(); 
@@ -1649,6 +1724,12 @@ function App() {
         handleCloseModal();
         endRoundAndStartNew();
     }, [handleCloseModal, endRoundAndStartNew]);
+
+    const handleSecretLoveRoundClose = useCallback(() => {
+        setModalState({ type: null, data: {} });
+        handleThemeChange(previousThemeRef.current);
+        endRoundAndStartNew();
+    }, [handleThemeChange, endRoundAndStartNew]);
 
     const handleExtremeIntroClose = useCallback(() => {
         setModalState({ type: null });
@@ -1763,7 +1844,7 @@ function App() {
                     <PlayerNameScreen onStart={handleNameEntry} {...onboardingProps} />
                 </motion.div>
                 )}
-                {(gameState === "playing" || gameState === "turnIntro" || gameState === "extremeRound") && (
+                {(gameState === "playing" || gameState === "turnIntro" || gameState === "extremeRound" || gameState === "secretLoveRound") && (
                 <motion.div key="playing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
                     <div ref={mainContentRef} className="w-full h-full z-[60] flex flex-col">
                         <header className="relative w-full flex justify-center items-center p-4 pt-6 shrink-0">
@@ -1775,12 +1856,19 @@ function App() {
                             </motion.button>
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
-                            <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} />
+                            {gameState !== 'secretLoveRound' && 
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} />
+                            }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
                                 {(gameState === 'playing' || gameState === 'extremeRound') && (
                                     <div className="turn-banner">
                                         {players[currentPlayer]}'s Turn!
+                                    </div>
+                                )}
+                                 {gameState === 'secretLoveRound' && (
+                                    <div className="turn-banner text-2xl text-[#e2d4ff]">
+                                        A Special Question for {players[currentPlayer]}...
                                     </div>
                                 )}
                             </div>
@@ -1865,6 +1953,25 @@ function App() {
                 {modalState.type === "confirmQuit" && (
                     <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings" })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
                 )}
+                 {modalState.type === 'secretLovePrompt' && (
+                    <SecretLovePromptModal
+                        key='secretLovePrompt'
+                        isOpen={true}
+                        onAccept={() => setModalState({ type: 'secretLoveMessage', data: { accepted: true } })}
+                        onRefuse={() => setModalState({ type: 'secretLoveMessage', data: { accepted: false } })}
+                        text={modalState.data.text}
+                        activeVisualTheme={activeVisualTheme}
+                    />
+                )}
+                {modalState.type === 'secretLoveMessage' && (
+                    <SecretLoveMessageModal
+                        key='secretLoveMessage'
+                        isOpen={true}
+                        accepted={modalState.data.accepted}
+                        activeVisualTheme={activeVisualTheme}
+                        onClose={handleSecretLoveRoundClose}
+                    />
+                )}
                 </AnimatePresence>
             </MotionConfig>
         </div>
@@ -1872,3 +1979,4 @@ function App() {
 }
 
 export default App;
+
