@@ -640,5 +640,56 @@ body {
 .editor-scroll-area[data-at-bottom="true"]::after {
   opacity: 0;
 }
+/* ===============================
+   MOBILE + RESPONSIVE POLISH FIXES
+   =============================== */
+@media (max-width: 768px) {
+
+  /* --- 1. Title screen full center --- */
+  .onboarding-screen-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 0 1rem;
+    text-align: center;
+  }
+
+  /* --- 2. Wheel layout tuning --- */
+  .wheel-container {
+    width: min(90vw, 460px);
+    height: min(90vw, 460px);
+    margin-top: clamp(1.5rem, 6vh, 3rem);
+  }
+
+  .spin-button {
+    width: 80px;
+    height: 80px;
+  }
+
+  /* --- 3. Pulse meter centering fix --- */
+  .pulse-meter {
+    margin: 1rem auto 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform: translateX(0); /* reset any offsets */
+  }
+
+  /* optional fine-tune if it still leans right */
+  .pulse-meter {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* --- 4. Modal visibility on smaller browser window --- */
+  .modal-metallic {
+    max-height: 80vh;
+    transform: translateY(-5%);
+    margin: 0 auto;
+  }
+}
 
 
