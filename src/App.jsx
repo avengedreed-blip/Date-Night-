@@ -1,5 +1,6 @@
-/* --- PROMPT RELIABILITY + SECRET ROUND TIMING FIX --- */
-/* --- UNIVERSAL TRIPLE-TAP ACCESS FIX --- */
+/* --- PROMPT RELIABILITY FIX --- */
+/* --- SECRET ROUND TIMING PATCH --- */
+/* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 
@@ -1022,10 +1023,6 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         animationFrameRef.current = requestAnimationFrame(animate);
     }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress]);
 
-    const combinedClickHandler = (e) => {
-        handleSpin();
-        handleWheelTap(e);
-    };
 
     return (
         <div className="wheel-container" role="img" aria-label="Game wheel">
@@ -1050,7 +1047,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                 <motion.button
                     aria-label="Spin"
                     className="spin-button"
-                    onClick={combinedClickHandler}
+                    onClick={(e) => { handleSpin(); handleWheelTap(e); }}
                     onTouchEnd={handleWheelTap}
                     disabled={isSpinning || !canSpin}
                     whileTap={{ scale: 0.95 }}
@@ -1712,7 +1709,6 @@ function App() {
                 setQueuedPrompt(secretModalData);
                 handleThemeChange('lavenderPromise');
                 setGameState('secretLoveRound');
-                return;
             }
         }, 100);
 
