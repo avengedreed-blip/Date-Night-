@@ -702,11 +702,12 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap }) => {
+const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
     const wheelCanvasRef = useRef(null);
+  const failsafeRef = useRef(null);
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
@@ -912,10 +913,14 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             playWheelStop();
             finalizeSpin();
         } finally {
+      // Ensure timers/RAF are cleared
+      if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
+      if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
+
             // This block guarantees the spin state is reset, even if upstream code throws an error.
             setIsSpinning(false);
             setIsPointerSettling(true);
-            setTimeout(() => setIsPointerSettling(false), 500);
+      setTimeout(() => { setIsPointerSettling(false); if (typeof onPointerSettled === 'function') onPointerSettled(); }, 500);
             spinLock.current = false;
             // Failsafe redundancy: directly reset the master spin lock if the normal prompt queue fails.
             setIsSpinInProgress(false);
@@ -937,7 +942,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         setIsSpinInProgress(true);
         playWheelSpinStart();
 
-        const failsafeTimer = setTimeout(() => {
+        failsafeRef.current = setTimeout(() => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
                 animationFrameRef.current = null;
@@ -963,7 +968,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             setTimeout(() => playWheelTick(), 80);
 
             setTimeout(() => {
-                clearTimeout(failsafeTimer);
+                if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
                 finishSpinNow();
             }, 500);
             return;
@@ -980,7 +985,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
 
         const animate = (now) => {
             if (!spinLock.current) {
-                clearTimeout(failsafeTimer);
+                if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
                 if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
                 animationFrameRef.current = null;
                 return;
@@ -1003,7 +1008,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             if (t < 1) {
                 animationFrameRef.current = requestAnimationFrame(animate);
             } else {
-                clearTimeout(failsafeTimer);
+                if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
                 animationFrameRef.current = null;
                 rotationRef.current = targetAngle;
                 finishSpinNow();
@@ -1038,7 +1043,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                     className="spin-button"
                     onClick={(e) => {
                         // Let tap handler run first; if it consumes the event, don't spin.
-                        if (!handleWheelTap(e)) {
+                        if (!handleWheelTap(e, canSpin)) {
                             handleSpin();
                         }
                     }}
@@ -1464,6 +1469,13 @@ function App() {
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
     const mainContentRef = useRef(null);
+const pendingPromptRef = useRef(null);
+const pointerFallbackRef = useRef(null);
+const handlePointerSettled = useCallback(() => {
+  if (pointerFallbackRef.current) { clearTimeout(pointerFallbackRef.current); pointerFallbackRef.current = null; }
+  if (pendingPromptRef.current) { setQueuedPrompt(pendingPromptRef.current); pendingPromptRef.current = null; }
+}, []);
+
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
     
@@ -1792,20 +1804,28 @@ function App() {
         return choice;
     }, [recentPrompts]);
     
-    const handleSpinFinish = useCallback((category) => {
-        const { truthPrompts, darePrompts, triviaQuestions } = prompts;
-        const list = category === 'truth' ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy]) : category === 'dare' ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy]) : [...triviaQuestions.normal];
-        const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
-        const text = pickPrompt(category, validList);
-        const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
-        
-        // Simplified timing: queue the prompt after a clean 350ms delay.
-        const finalizationTimer = setTimeout(() => {
-            setQueuedPrompt({ title, text, type: category });
-        }, 350);
-        
-        return () => clearTimeout(finalizationTimer);
-    }, [prompts, isExtremeMode, pickPrompt]);
+    const handleSpinFinish = useCallback((category) =>{
+const { truthPrompts, darePrompts, triviaQuestions } = prompts;
+const list =
+  category === 'truth'
+    ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy])
+    : category === 'dare'
+    ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
+    : [...triviaQuestions.normal];
+
+const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
+const text = pickPrompt(category, validList);
+const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
+
+pendingPromptRef.current = { title, text, type: category };
+if (pointerFallbackRef.current) clearTimeout(pointerFallbackRef.current);
+pointerFallbackRef.current = setTimeout(() => {
+  if (pendingPromptRef.current) {
+    setQueuedPrompt(pendingPromptRef.current);
+    pendingPromptRef.current = null;
+  }
+}, 1000);
+}, [prompts, isExtremeMode, pickPrompt]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -1855,7 +1875,10 @@ function App() {
     }, [handleRestartGame]);
     
     const handleSecretPreviewTap = useRef({ count: 0, timer: null });
-    const handleWheelTap = (e) => {
+    const handleWheelTap = (e, canSpinArg) => {
+    // Ignore secret shortcut while spinning or blocked
+    if (!canSpinArg) return false;
+
         e.stopPropagation();
         // This must function even if the button is logically disabled for spinning
         const state = handleSecretPreviewTap.current;
@@ -1923,7 +1946,7 @@ function App() {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap} />
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
@@ -2043,4 +2066,3 @@ function App() {
 }
 
 export default App;
-
