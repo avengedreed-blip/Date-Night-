@@ -2129,3 +2129,5 @@ pointerFallbackRef.current = setTimeout(() => {
         </div>
     );
 }
+
+export default App;
