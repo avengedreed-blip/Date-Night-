@@ -1,4 +1,4 @@
-/* --- TURN BANNER VISUAL PATCH --- */
+/* --- TURN BANNER POSITION FIX --- */
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400..900&display=swap');
 
 @tailwind base;
@@ -379,7 +379,6 @@ body {
 /* ===========================================================
    PULSE METER (taller, centered, animated)
    =========================================================== */
-/* --- PULSE METER & TURN BANNER FIX --- */
 .pulse-meter {
   position: relative;
   left: 50%;
@@ -395,6 +394,7 @@ body {
     0 0 25px rgba(255, 255, 255, .18),
     inset 0 1px 3px rgba(255, 255, 255, .2),
     inset 0 -2px 4px rgba(0, 0, 0, .5);
+  margin-bottom: 0.75rem;
 }
 
 .pulse-meter__fill {

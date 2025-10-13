@@ -1,6 +1,5 @@
-/* --- PROMPT TIMING SAFETY PATCH --- */
-/* --- CUSTOM PROMPT EDITOR RETAINED & ACTIVE --- */
-/* --- REMOVED UNAUTHORIZED INTENSITY MODAL --- */
+/* --- PROMPT RELIABILITY + SECRET ROUND TIMING FIX --- */
+/* --- UNIVERSAL TRIPLE-TAP ACCESS FIX --- */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 
@@ -1023,6 +1022,10 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         animationFrameRef.current = requestAnimationFrame(animate);
     }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress]);
 
+    const combinedClickHandler = (e) => {
+        handleSpin();
+        handleWheelTap(e);
+    };
 
     return (
         <div className="wheel-container" role="img" aria-label="Game wheel">
@@ -1043,12 +1046,12 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                     </div>
                 </motion.div>
             </div>
-            {/* --- SECRET ROUND MOBILE GESTURE ACCESS --- */}
-            <div className="spin-button-wrapper" onTouchEnd={handleWheelTap}>
+            <div className="spin-button-wrapper">
                 <motion.button
                     aria-label="Spin"
                     className="spin-button"
-                    onClick={handleSpin}
+                    onClick={combinedClickHandler}
+                    onTouchEnd={handleWheelTap}
                     disabled={isSpinning || !canSpin}
                     whileTap={{ scale: 0.95 }}
                 >
@@ -1442,7 +1445,7 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
-    const [modalState, setModalState] = useState({ type: null, data: {} });
+    const [modalState, setModalState] = useState({ type: null, data: {}, isClosing: false });
 
     const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
@@ -1557,31 +1560,25 @@ function App() {
     const safeOpenModal = useCallback((type, data = {}) => {
         clearTimeout(turnIntroTimeoutRef.current);
         setModalState(current => {
-            if (current.type) {
+            if (current.type && current.type !== 'closing') {
                 console.warn(`Modal race condition blocked: Tried to open '${type}' while '${current.type}' was active.`);
                 return current;
             }
-            return { type, data };
+            return { type, data, isClosing: false };
         });
     }, []);
     
-    /* --- PROMPT RELIABILITY FIX --- */
     useEffect(() => {
-        if (queuedPrompt && !modalState.type) {
-          let opened = false;
+        if (queuedPrompt && (!modalState.type || modalState.type === 'closing')) {
           const openPrompt = () => {
-            if (!opened && queuedPrompt) {
-              opened = true;
-              requestAnimationFrame(() => safeOpenModal("prompt", queuedPrompt));
-              setQueuedPrompt(null);
-              setIsSpinInProgress(false);
-            }
+            requestAnimationFrame(() => safeOpenModal('prompt', queuedPrompt));
+            setQueuedPrompt(null);
+            setIsSpinInProgress(false);
           };
-          const promptTimer = setTimeout(openPrompt, 150);
-          const backupTimer = setTimeout(() => { if (!opened) openPrompt(); }, 2000);
-          return () => { clearTimeout(promptTimer); clearTimeout(backupTimer); };
+          const timer = setTimeout(openPrompt, 200);
+          return () => clearTimeout(timer);
         }
-      }, [queuedPrompt, modalState.type, safeOpenModal]);
+    }, [queuedPrompt, modalState.type, modalState.isClosing, safeOpenModal]);
 
 
     useEffect(() => { 
@@ -1601,7 +1598,7 @@ function App() {
     }, []);
 
     useEffect(() => { 
-        if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' ) { 
+        if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) { 
             audioEngine.playModalOpen(); 
         } 
     }, [modalState.type]);
@@ -1701,17 +1698,23 @@ function App() {
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const activePlayerName = players[nextPlayerId];
 
-        // --- SECRET ROUND (KATY) ---
-        if (gameState !== 'secretLoveRound' && activePlayerName?.toLowerCase() === 'katy' && !secretRoundUsed && Math.random() < 0.15) {
-            setSecretRoundUsed(true);
-            const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-            const secretModalData = { ...secretPrompt, type: 'secret' };
-            setQueuedPrompt(secretModalData);
-            setCurrentPlayer(nextPlayerId);
-            setGameState('secretLoveRound');
-            handleThemeChange('lavenderPromise');
-            return;
-        }
+        setTimeout(() => {
+            if (
+                gameState !== 'secretLoveRound' &&
+                activePlayerName?.toLowerCase() === 'katy' &&
+                !secretRoundUsed &&
+                Math.random() < 0.15
+            ) {
+                setSecretRoundUsed(true);
+                const secretPrompt =
+                    secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+                const secretModalData = { ...secretPrompt, type: 'secret' };
+                setQueuedPrompt(secretModalData);
+                handleThemeChange('lavenderPromise');
+                setGameState('secretLoveRound');
+                return;
+            }
+        }, 100);
 
         if (isExtremeMode || gameState === 'secretLoveRound') {
             setIsExtremeMode(false);
@@ -1749,8 +1752,11 @@ function App() {
     }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed]);
 
     const handleCloseModal = useCallback(() => { 
-        audioEngine.playModalClose(); 
-        setModalState({ type: null, data: {} }); 
+        audioEngine.playModalClose();
+        setModalState(prev => ({ ...prev, type: 'closing', isClosing: true }));
+        setTimeout(() => {
+            setModalState({ type: null, data: {}, isClosing: false });
+        }, 300); // Animation duration
     }, []);
 
     const handlePromptModalClose = useCallback(() => {
@@ -1786,7 +1792,6 @@ function App() {
         return choice;
     }, [recentPrompts]);
     
-    /* --- PROMPT SEQUENCE FIX --- */
     const handleSpinFinish = useCallback((category) => {
         const { truthPrompts, darePrompts, triviaQuestions } = prompts;
         const list = category === 'truth' ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy]) : category === 'dare' ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy]) : [...triviaQuestions.normal];
@@ -1796,12 +1801,13 @@ function App() {
         
         const finalizationTimer = setTimeout(() => {
             setTimeout(() => {
-                if (!modalState.type) {
+                if (!modalState.type || modalState.type === 'closing') {
                     setQueuedPrompt({ title, text, type: category });
                 }
             }, 100);
         }, 600);
-    }, [prompts, isExtremeMode, pickPrompt, modalState]);
+        return () => clearTimeout(finalizationTimer);
+    }, [prompts, isExtremeMode, pickPrompt, modalState.type]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -1850,9 +1856,9 @@ function App() {
         setGameState('unlock');
     }, [handleRestartGame]);
     
-    /* --- SECRET ROUND MOBILE GESTURE ACCESS --- */
     const handleSecretPreviewTap = useRef({ count: 0, timer: null });
-    const handleWheelTap = () => {
+    const handleWheelTap = (e) => {
+        e.stopPropagation(); // Prevent event from bubbling
         const state = handleSecretPreviewTap.current;
         state.count += 1;
         clearTimeout(state.timer);
@@ -1876,8 +1882,7 @@ function App() {
 
         if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
         
-        /* --- PROMPT SEQUENCE FIX --- */
-        const canSpin = !isSpinInProgress && !modalState.type && !queuedPrompt && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
+        const canSpin = !isSpinInProgress && (!modalState.type || modalState.type === 'closing') && !queuedPrompt && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
 
         return (
             <AnimatePresence mode="wait" initial={false}>
@@ -1978,7 +1983,7 @@ function App() {
                 )}
                 </AnimatePresence>
 
-                <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
+                <div id="app-content" aria-hidden={!!modalState.type && modalState.type !== 'closing'} className="w-full h-screen relative overflow-hidden">
                     {renderContent()}
                 </div>
                 
@@ -1989,13 +1994,13 @@ function App() {
                     <ExtremeIntroModal isOpen={true} onClose={handleExtremeIntroClose} activeVisualTheme={activeVisualTheme} />
                     </>
                 )}
-                {modalState.type === "prompt" && modalState.data.type === 'secret' && (
+                {modalState.type === "secretPrompt" && (
                     <SecretPromptModal 
                         key="secret-prompt" 
                         isOpen={true} 
-                        prompt={modalState.data} 
-                        onAccept={() => setModalState({ type: 'secretMessage', data: { outcome: modalState.data.outcomes.accept } })}
-                        onRefuse={() => setModalState({ type: 'secretMessage', data: { outcome: modalState.data.outcomes.refuse } })}
+                        prompt={modalState.data.prompt} 
+                        onAccept={() => setModalState({ type: 'secretMessage', data: { outcome: modalState.data.prompt.outcomes.accept } })}
+                        onRefuse={() => setModalState({ type: 'secretMessage', data: { outcome: modalState.data.prompt.outcomes.refuse } })}
                         activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "secretMessage" && (
