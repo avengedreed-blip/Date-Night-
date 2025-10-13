@@ -705,7 +705,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled}) => {
+const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled, safeOpenModal}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -1053,7 +1053,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
         if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
       } catch (err) { /* no-op */ }
       secretPressTimerRef.current = null;
-    }, 1000);
+    }, 850);
   }}
   onPointerUp={() => {
     if (secretPressTimerRef.current) {
@@ -1082,7 +1082,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                         // Suppress normal spin if a secret prompt just opened
                         if (Date.now() - (secretPromptOpenAt?.t || 0) < 1200) { return; }
                         // Let tap handler run first; if it consumes the event, don't spin.
-                        if (!handleWheelTap(e, canSpin)) {
+                        if (!handleWheelTap(e)) {
                             handleSpin();
                         }
                     }}
@@ -1940,7 +1940,7 @@ pointerFallbackRef.current = setTimeout(() => {
     }, [handleRestartGame]);
     
     const handleSecretPreviewTap = useRef({ count: 0, timer: null });
-    const handleWheelTap = (e, canSpinArg) => {
+    const handleWheelTap = (e) => {
     // Ignore secret shortcut while spinning or blocked
     if (!canSpinArg) return false;
 
@@ -1949,7 +1949,7 @@ pointerFallbackRef.current = setTimeout(() => {
         const state = handleSecretPreviewTap.current;
         state.count += 1;
         clearTimeout(state.timer);
-        state.timer = setTimeout(() => (state.count = 0), 600);
+        state.timer = setTimeout(() => (state.count = 0), 750);
 
         if (state.count >= 3) {
             state.count = 0;
@@ -2011,7 +2011,7 @@ pointerFallbackRef.current = setTimeout(() => {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} />
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} / safeOpenModal={safeOpenModal} />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
