@@ -1,3 +1,4 @@
+/* --- TURN BANNER VISUAL PATCH --- */
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400..900&display=swap');
 
 @tailwind base;
@@ -378,10 +379,12 @@ body {
 /* ===========================================================
    PULSE METER (taller, centered, animated)
    =========================================================== */
-/* --- TURN BANNER & METER LAYOUT FIX --- */
+/* --- PULSE METER & TURN BANNER FIX --- */
 .pulse-meter {
   position: relative;
-  margin-inline: auto; /* Replaced transform for natural centering */
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 1rem;
   width: clamp(280px, 80%, 400px);
   height: 24px;
   border-radius: 9999px;
@@ -430,17 +433,13 @@ body {
 /* ===========================================================
    TURN BANNER
    =========================================================== */
-/* --- TURN BANNER & METER LAYOUT FIX --- */
 .turn-banner {
-  position: static; /* Changed from absolute */
-  margin-top: 0.75rem; /* Added for spacing */
-  text-align: center; /* Added for centering text */
-  white-space: nowrap;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--theme-highlight, #ffd700);
-  text-shadow: 0 0 12px rgba(0,0,0,0.7), 0 0 20px var(--theme-highlight);
-  z-index: 55;
+    margin-top: 1rem;
+    text-align: center;
+    font-size: clamp(1.2rem, 4vw, 1.8rem);
+    font-weight: 700;
+    color: var(--theme-highlight, #ffd700);
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
 }
 
 /* ===========================================================
@@ -662,5 +661,38 @@ body {
 @keyframes floatLavender {
   0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
   50% { transform: translateY(-30px) scale(1.2); opacity: 0.7; }
+}
+
+/* --- SECRET ROUND VISUAL FIX --- */
+.secret-message .modal-metallic {
+  box-shadow: 0 0 40px rgba(255, 150, 200, 0.55),
+              inset 0 0 16px rgba(255, 255, 255, 0.25);
+}
+.secret-message .modal-header,
+.secret-message .modal-body {
+  font-family: 'Great Vibes', cursive;
+  letter-spacing: 0.3px;
+}
+
+.secret-message .modal-title {
+  font-family: 'Great Vibes', cursive;
+  font-size: clamp(1.3rem, 4vw, 1.6rem);
+  color: #ffe6f0;
+  text-shadow: 0 0 8px rgba(255, 150, 200, 0.5);
+}
+
+.secret-message .modal-body {
+  animation: fadeInSecret 1.8s ease;
+  text-align: justify;
+  line-height: 1.6;
+  color: rgba(255, 230, 240, 0.95);
+  font-size: 1.1rem;
+  text-shadow: 0 0 6px rgba(255, 150, 200, 0.25);
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+@keyframes fadeInSecret {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
