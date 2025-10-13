@@ -707,6 +707,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
     const wheelCanvasRef = useRef(null);
+  const secretPressTimerRef = useRef(null);
   const failsafeRef = useRef(null);
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
@@ -1037,7 +1038,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                     </div>
                 </motion.div>
             </div>
-            <div className="spin-button-wrapper">
+            <div className="spin-button-wrapper" onPointerDown={() => { if (!canSpin || spinLock.current) return; secretPressTimerRef.current = setTimeout(() => {   const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];   safeOpenModal('secretPrompt', { prompt: secretPrompt });   secretPressTimerRef.current = null; }, 1000); }} onPointerUp={() => { if (secretPressTimerRef.current) {   clearTimeout(secretPressTimerRef.current);   secretPressTimerRef.current = null;   handleSpin(); } }} onPointerLeave={() => { if (secretPressTimerRef.current) { clearTimeout(secretPressTimerRef.current); secretPressTimerRef.current = null; } }}>
                 <motion.button
                     aria-label="Spin"
                     className="spin-button"
