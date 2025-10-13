@@ -8,6 +8,9 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, Motio
 import * as Tone from "tone";
 if (!window.Tone) window.Tone = Tone;
 
+// Registry to suppress click immediately after a secret round opens
+const secretPromptOpenAt = { t: 0 };
+
 // Polyfill for structuredClone for wider browser compatibility.
 if (typeof structuredClone !== "function") {
     globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -1038,11 +1041,46 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                     </div>
                 </motion.div>
             </div>
-            <div className="spin-button-wrapper" onPointerDown={() => { if (!canSpin || spinLock.current) return; secretPressTimerRef.current = setTimeout(() => {   const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];   safeOpenModal('secretPrompt', { prompt: secretPrompt });   secretPressTimerRef.current = null; }, 1000); }} onPointerUp={() => { if (secretPressTimerRef.current) {   clearTimeout(secretPressTimerRef.current);   secretPressTimerRef.current = null;   handleSpin(); } }} onPointerLeave={() => { if (secretPressTimerRef.current) { clearTimeout(secretPressTimerRef.current); secretPressTimerRef.current = null; } }}>
-                <motion.button
+            <div
+  className="spin-button-wrapper"
+  onContextMenu={(e) => e.preventDefault()}
+  onPointerDown={() => {
+    if (!canSpin || spinLock.current) return;
+    secretPressTimerRef.current = setTimeout(() => {
+      const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+      try { 
+        safeOpenModal('secretPrompt', { prompt: secretPrompt }); 
+        if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
+      } catch (err) { /* no-op */ }
+      secretPressTimerRef.current = null;
+    }, 1000);
+  }}
+  onPointerUp={() => {
+    if (secretPressTimerRef.current) {
+      clearTimeout(secretPressTimerRef.current);
+      secretPressTimerRef.current = null;
+      handleSpin();
+    }
+  }}
+  onPointerLeave={() => {
+    if (secretPressTimerRef.current) {
+      clearTimeout(secretPressTimerRef.current);
+      secretPressTimerRef.current = null;
+    }
+  }}
+  onPointerCancel={() => {
+    if (secretPressTimerRef.current) {
+      clearTimeout(secretPressTimerRef.current);
+      secretPressTimerRef.current = null;
+    }
+  }}
+>
+<motion.button
                     aria-label="Spin"
-                    className="spin-button"
+                    className="spin-button" onContextMenu={(e) => e.preventDefault()}
                     onClick={(e) => {
+                        // Suppress normal spin if a secret prompt just opened
+                        if (Date.now() - (secretPromptOpenAt?.t || 0) < 1200) { return; }
                         // Let tap handler run first; if it consumes the event, don't spin.
                         if (!handleWheelTap(e, canSpin)) {
                             handleSpin();
@@ -1562,6 +1600,7 @@ const handlePointerSettled = useCallback(() => {
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
+        if (type === 'secretPrompt') { try { secretPromptOpenAt.t = Date.now(); } catch {} }
         // Failsafe: Ensure any modal opening clears the spin lock to prevent deadlocks.
         setIsSpinInProgress(false);
         clearTimeout(turnIntroTimeoutRef.current);
@@ -1574,25 +1613,50 @@ const handlePointerSettled = useCallback(() => {
         });
     }, []);
     
-    useEffect(() => {
-        if (queuedPrompt && (!modalState.type || modalState.type === 'closing')) {
-            const openPrompt = () => {
-                requestAnimationFrame(() => {
-                    // Route to the correct modal based on prompt type
-                    if (queuedPrompt.type === 'secret') {
-                        safeOpenModal('secretPrompt', queuedPrompt);
-                    } else {
-                        safeOpenModal('prompt', queuedPrompt);
-                    }
-                });
-                setQueuedPrompt(null);
-                setIsSpinInProgress(false);
-            };
-            // The 200ms delay from the original code provides a nice beat before the modal appears.
-            const timer = setTimeout(openPrompt, 200);
-            return () => clearTimeout(timer);
+        useEffect(() => {
+        if (!queuedPrompt) return;
+        // Ensure prompt has a stable id to ack when mounted
+        if (!queuedPrompt._id) {
+            setQueuedPrompt(prev => prev ? ({ ...prev, _id: (Math.random().toString(36).slice(2) + Date.now().toString(36)) }) : prev);
+            return;
         }
-    }, [queuedPrompt, modalState.type, modalState.isClosing, safeOpenModal]);
+        let cancelled = false;
+        let attempts = 0;
+        const expectedType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
+
+        const tryOpen = () => {
+            if (cancelled) return;
+            // Ack: modal mounted with the same id
+            const sameId = modalState && modalState.data && modalState.data._id === queuedPrompt._id;
+            if (modalState.type === expectedType && sameId) {
+                setIsSpinInProgress(false);
+                setQueuedPrompt(null);
+                return;
+            }
+            // Try to open when no blocking modal, otherwise retry shortly
+            if (!modalState.type || modalState.type === 'closing') {
+                requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
+            }
+            attempts += 1;
+            if (attempts < 12) {
+                setTimeout(tryOpen, 150);
+            } else {
+                // Give it one last push in case a transient state blocked us
+                requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
+                setTimeout(() => {
+                    const mounted = modalState.type === expectedType && modalState.data && modalState.data._id === queuedPrompt._id;
+                    if (mounted) {
+                        setQueuedPrompt(null);
+                        setIsSpinInProgress(false);
+                    }
+                }, 200);
+            }
+        };
+
+        // Small delay provides a pleasant beat before showing the modal
+        const timer = setTimeout(tryOpen, 200);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [queuedPrompt, modalState.type, modalState.isClosing, modalState.data, safeOpenModal]);
 
 
     useEffect(() => { 
@@ -1818,7 +1882,7 @@ const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
 const text = pickPrompt(category, validList);
 const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
 
-pendingPromptRef.current = { title, text, type: category };
+pendingPromptRef.current = { _id: (Math.random().toString(36).slice(2) + Date.now().toString(36)), title, text, type: category };
 if (pointerFallbackRef.current) clearTimeout(pointerFallbackRef.current);
 pointerFallbackRef.current = setTimeout(() => {
   if (pendingPromptRef.current) {
@@ -2065,5 +2129,3 @@ pointerFallbackRef.current = setTimeout(() => {
         </div>
     );
 }
-
-export default App;
