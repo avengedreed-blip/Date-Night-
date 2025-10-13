@@ -256,7 +256,7 @@ const defaultPrompts = { truthPrompts: { normal: [ "Would you remarry if your pa
 /* --- SECRET ROUND (KATY) --- */
 const secretRoundPrompts = [
     {
-        type: 'truth',
+        type: 'secret',
         text: 'Will you love Aaron forever?',
         outcomes: {
             accept: {
@@ -270,7 +270,7 @@ const secretRoundPrompts = [
         },
     },
     {
-        type: 'dare',
+        type: 'secret',
         text: 'I dare you to love Aaron forever.',
         outcomes: {
             accept: {
@@ -896,18 +896,11 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         }
     }, [drawWheel]);
     
-    /* --- FIXED WHEEL WINNER CALCULATION --- */
     const finalizeSpin = useCallback(() => {
         const rotation = rotationRef.current;
         const sliceAngle = 360 / CATEGORIES.length;
-
-        // Normalize the final rotation. Use negative because wheel spins clockwise.
-        // Add 90 degrees to treat top as the 0-point, then 360 for positive modulo.
         const normalizedAngle = (-rotation + 90 + 360) % 360;
-
-        // Use floor division to find the slice index.
         const sliceIndex = Math.floor(normalizedAngle / sliceAngle) % CATEGORIES.length;
-
         const winner = CATEGORIES[sliceIndex].toLowerCase();
         onSpinFinish(winner);
     }, [onSpinFinish]);
@@ -915,27 +908,24 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
     /* --- GUARANTEED SPIN FINALIZATION --- */
     const finishSpinNow = useCallback(() => {
         if (!spinLock.current) return; // Already finalized or never started
-
-        playWheelStop();
-        
-        // Finalize winner selection
-        finalizeSpin();
-        
-        // Update UI states
-        setIsSpinning(false);
-        setIsPointerSettling(true);
-        setTimeout(() => setIsPointerSettling(false), 500);
-
-        // Release lock
-        spinLock.current = false;
-        // setIsSpinInProgress is now handled by prompt queue
-        
-    }, [finalizeSpin, playWheelStop]);
+        try {
+            playWheelStop();
+            finalizeSpin();
+        } finally {
+            // This block guarantees the spin state is reset, even if upstream code throws an error.
+            setIsSpinning(false);
+            setIsPointerSettling(true);
+            setTimeout(() => setIsPointerSettling(false), 500);
+            spinLock.current = false;
+            // Failsafe redundancy: directly reset the master spin lock if the normal prompt queue fails.
+            setIsSpinInProgress(false);
+        }
+    }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
 
 
     const handleSpin = useCallback(() => {
         const now = Date.now();
-        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) { // increased debounce
+        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
             return;
         }
         lastSpinTimeRef.current = now;
@@ -953,7 +943,6 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                 animationFrameRef.current = null;
             }
             console.warn('Failsafe spin timer triggered. Finalizing spin now.');
-            // Settle at a random final spot for visual consistency
             rotationRef.current += (Math.random() * 180 - 90); 
             if(wheelCanvasRef.current) wheelCanvasRef.current.style.transform = `rotate(${rotationRef.current}deg)`;
             finishSpinNow();
@@ -990,7 +979,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
         let lastTickAngle = startAngle;
 
         const animate = (now) => {
-            if (!spinLock.current) { // Stop if already finalized by failsafe
+            if (!spinLock.current) {
                 clearTimeout(failsafeTimer);
                 if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
                 animationFrameRef.current = null;
@@ -1003,7 +992,7 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
             const currentAngle = startAngle + eased * spinDegrees;
             
             if(wheelCanvasRef.current) wheelCanvasRef.current.style.transform = `rotate(${currentAngle}deg)`;
-            rotationRef.current = currentAngle; // Update ref continuously for failsafe
+            rotationRef.current = currentAngle;
 
             const TICK_DEGREES = 360 / CATEGORIES.length / 2;
             if (currentAngle - lastTickAngle >= TICK_DEGREES) {
@@ -1047,9 +1036,14 @@ const Wheel = React.memo(({ onSpinFinish, playWheelSpinStart, playWheelTick, pla
                 <motion.button
                     aria-label="Spin"
                     className="spin-button"
-                    onClick={(e) => { handleSpin(); handleWheelTap(e); }}
-                    onTouchEnd={handleWheelTap}
-                    disabled={isSpinning || !canSpin}
+                    onClick={(e) => {
+                        // Let tap handler run first; if it consumes the event, don't spin.
+                        if (!handleWheelTap(e)) {
+                            handleSpin();
+                        }
+                    }}
+                    // The disabled attribute is removed to allow the triple-tap to register even when a spin is not allowed.
+                    // The handleSpin function itself contains the necessary guards.
                     whileTap={{ scale: 0.95 }}
                 >
                     {isSpinning ? <SpinLoader /> : 'SPIN'}
@@ -1555,6 +1549,8 @@ function App() {
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
+        // Failsafe: Ensure any modal opening clears the spin lock to prevent deadlocks.
+        setIsSpinInProgress(false);
         clearTimeout(turnIntroTimeoutRef.current);
         setModalState(current => {
             if (current.type && current.type !== 'closing') {
@@ -1567,13 +1563,21 @@ function App() {
     
     useEffect(() => {
         if (queuedPrompt && (!modalState.type || modalState.type === 'closing')) {
-          const openPrompt = () => {
-            requestAnimationFrame(() => safeOpenModal('prompt', queuedPrompt));
-            setQueuedPrompt(null);
-            setIsSpinInProgress(false);
-          };
-          const timer = setTimeout(openPrompt, 200);
-          return () => clearTimeout(timer);
+            const openPrompt = () => {
+                requestAnimationFrame(() => {
+                    // Route to the correct modal based on prompt type
+                    if (queuedPrompt.type === 'secret') {
+                        safeOpenModal('secretPrompt', queuedPrompt);
+                    } else {
+                        safeOpenModal('prompt', queuedPrompt);
+                    }
+                });
+                setQueuedPrompt(null);
+                setIsSpinInProgress(false);
+            };
+            // The 200ms delay from the original code provides a nice beat before the modal appears.
+            const timer = setTimeout(openPrompt, 200);
+            return () => clearTimeout(timer);
         }
     }, [queuedPrompt, modalState.type, modalState.isClosing, safeOpenModal]);
 
@@ -1695,21 +1699,21 @@ function App() {
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const activePlayerName = players[nextPlayerId];
 
+        // This logic remains the same, but the secret prompt is now queued differently.
         setTimeout(() => {
-            if (
-                gameState !== 'secretLoveRound' &&
-                activePlayerName?.toLowerCase() === 'katy' &&
-                !secretRoundUsed &&
-                Math.random() < 0.15
-            ) {
+             if (
+                 gameState !== 'secretLoveRound' &&
+                 activePlayerName?.toLowerCase() === 'katy' &&
+                 !secretRoundUsed &&
+                 Math.random() < 0.15
+             ) {
                 setSecretRoundUsed(true);
-                const secretPrompt =
-                    secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-                const secretModalData = { ...secretPrompt, type: 'secret' };
-                setQueuedPrompt(secretModalData);
+                const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+                // The queued prompt now correctly has type: 'secret'
+                setQueuedPrompt(secretPrompt); 
                 handleThemeChange('lavenderPromise');
                 setGameState('secretLoveRound');
-            }
+             }
         }, 100);
 
         if (isExtremeMode || gameState === 'secretLoveRound') {
@@ -1795,15 +1799,13 @@ function App() {
         const text = pickPrompt(category, validList);
         const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
         
+        // Simplified timing: queue the prompt after a clean 350ms delay.
         const finalizationTimer = setTimeout(() => {
-            setTimeout(() => {
-                if (!modalState.type || modalState.type === 'closing') {
-                    setQueuedPrompt({ title, text, type: category });
-                }
-            }, 100);
-        }, 600);
+            setQueuedPrompt({ title, text, type: category });
+        }, 350);
+        
         return () => clearTimeout(finalizationTimer);
-    }, [prompts, isExtremeMode, pickPrompt, modalState.type]);
+    }, [prompts, isExtremeMode, pickPrompt]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -1854,16 +1856,22 @@ function App() {
     
     const handleSecretPreviewTap = useRef({ count: 0, timer: null });
     const handleWheelTap = (e) => {
-        e.stopPropagation(); // Prevent event from bubbling
+        e.stopPropagation();
+        // This must function even if the button is logically disabled for spinning
         const state = handleSecretPreviewTap.current;
         state.count += 1;
         clearTimeout(state.timer);
         state.timer = setTimeout(() => (state.count = 0), 600);
+
         if (state.count >= 3) {
             state.count = 0;
+            clearTimeout(state.timer);
             const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+            // Pass the full prompt object, including the 'type: "secret"' property
             safeOpenModal('secretPrompt', { prompt: secretPrompt });
+            return true; // Event consumed, prevents spin
         }
+        return false; // Event not consumed
     };
     
     const renderContent = () => {
@@ -2007,7 +2015,7 @@ function App() {
                         onClose={handleSecretLoveRoundClose} 
                         activeVisualTheme={activeVisualTheme} />
                 )}
-                {modalState.type === "prompt" && modalState.data.type !== 'secret' && (
+                {modalState.type === "prompt" && (
                     <PromptModal key="prompt" isOpen={true} onClose={handlePromptModalClose} onRefuse={handleRefuse} prompt={modalState.data} activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "consequence" && (
