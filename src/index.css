@@ -77,13 +77,15 @@ body {
     --meter-stop-3: #e6e6fa;
     --theme-label: #E6E6FA;
   }
-  .theme-lavender-promise {
-    --theme-highlight: #e2d4ff;
-    --theme-base: #544b80;
-    --theme-shadow: #2a2540;
-    --meter-stop-0: #b8a1ff;
-    --meter-stop-3: #f2e6ff;
-    --theme-label: #F0E6FF;
+  /* === Lavender Promise (Secret Round Theme) === */.theme-lavender-promise {
+    --theme-base: #2d0a4e;            /* deep violet base */
+    --theme-highlight: #f6a2ff;       /* pink-violet accent */
+    --theme-label: #ffffff;           /* bright white labels */
+    --theme-glow: rgba(248, 192, 255, 0.35);
+    --theme-accent: #d47aff;
+    --theme-pulse: #f8c8ff;
+    --theme-sheen: rgba(255, 160, 240, 0.55);
+    --theme-shadow: rgba(25, 5, 45, 0.9);
   }
   .theme-forever-promise {
     --theme-highlight: #e8d8ff;

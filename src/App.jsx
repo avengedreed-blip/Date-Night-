@@ -217,7 +217,6 @@ const publicApi = {
             if (Tone.Transport.state === 'started') {
                 Tone.Transport.stop(); 
                 Tone.Transport.cancel(0);
-                Tone.Transport.seconds = 0;
             }
         },
         getCurrentBpm: () => activeTheme ? activeTheme.bpm : 85,
@@ -751,7 +750,14 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             velvetCarnival: { rim: { base: '#FF4500', high: '#FF944D', low: '#662200' }, slices: { DARE: { base: "#FF4500", high: "#FF944D", low: "#662200" }, TRUTH: { base: "#9B111E", high: "#FF4C5B", low: "#400000" }, TRIVIA: { base: "#D4AF37", high: "#FFD700", low: "#7A5C00" } } },
             starlitAbyss: { rim: { base: '#4C4A9E', high: '#8A2BE2', low: '#1C1030' }, slices: { DARE: { base: "#483D8B", high: "#8A2BE2", low: "#1C1030" }, TRUTH: { base: "#191970", high: "#4169E1", low: "#0A0A33" }, TRIVIA: { base: "#6C5CE7", high: "#A29BFE", low: "#2D3436" } } },
             crimsonFrenzy: { rim: { base: '#8B0000', high: '#DC143C', low: '#3D0000' }, slices: { DARE: { base: '#DC143C', high: '#FF6F91', low: '#7A1C1C' }, TRUTH: { base: "#483D8B", high: "#8A2BE2", low: "#1C1030" }, TRIVIA: { base: "#D4AF37", high: "#FFD700", low: "#7A5C00" } } },
-            lavenderPromise: { rim: { base: '#B48CFF', high: '#DCC6FF', low: '#6E46C6' }, slices: { DARE: { base: "#C89CFF", high: "#E9D9FF", low: "#7C54D1" }, TRUTH: { base: "#C39BFF", high: "#EAD7FF", low: "#7548C9" }, TRIVIA: { base: "#D1B3FF", high: "#F3ECFF", low: "#8054D6" } } },
+            lavenderPromise: {
+              rim: { base: '#5B2E99', high: '#E8D8FF', low: '#311A63' },
+              slices: {
+                DARE:   { base: '#8F5CFF', high: '#E8D8FF', low: '#4B2AA6' },
+                TRUTH:  { base: '#7D4FFF', high: '#E4D0FF', low: '#3F1D8B' },
+                TRIVIA: { base: '#9C70FF', high: '#F3ECFF', low: '#5630B8' }
+              }
+            },
             foreverPromise: { rim: { base: '#B88BFF', high: '#E8D8FF', low: '#6B45C6' }, slices: { DARE: { base: "#C79BFF", high: "#EFDEFF", low: "#774BD0" }, TRUTH: { base: "#C49AFF", high: "#EED6FF", low: "#7446C7" }, TRIVIA: { base: "#D7B7FF", high: "#F7F0FF", low: "#8055D8" } } }
         };
 
@@ -1604,7 +1610,7 @@ function App() {
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
-        if (modalStateRef.current?.type) return; // prevent stacking
+        if (modalStateRef.current?.type && modalStateRef.current?.type !== 'closing') return;
         if (type === 'secretPrompt') { try { secretPromptOpenAt.t = Date.now(); } catch {} }
         setModalState({ type, data });
       }, []);
@@ -1615,7 +1621,7 @@ function App() {
       const promptId = queuedPrompt._id || Date.now();
       let mounted = false;
       const startTime = Date.now();
-      const timeout = 6000; // 6 seconds max retry window
+      const timeout = 6000;
       const interval = 150;
     
       const tryOpen = () => {
@@ -1634,7 +1640,9 @@ function App() {
           setQueuedPrompt(null);
         }
       };
-      tryOpen();
+    
+      // Delay to allow React to commit new state before polling
+      setTimeout(tryOpen, 20);
     }, [queuedPrompt, safeOpenModal]);
 
     useEffect(() => { 
@@ -1679,13 +1687,15 @@ function App() {
             themeNameBeforeSecretRef.current = currentTheme;
             (async () => {
                 await audioEngine.stopTheme();
-                setTimeout(() => audioEngine.startTheme('firstDanceMix'), 300);
+                await new Promise(res => setTimeout(res, 350));
+                await audioEngine.startTheme('firstDanceMix');
             })();
         } else if (modalState.type !== 'secretPrompt' && modalState.type !== 'secretMessage' && themeNameBeforeSecretRef.current) {
             const prev = themeNameBeforeSecretRef.current;
             (async () => {
                 await audioEngine.stopTheme();
-                setTimeout(() => audioEngine.startTheme(prev), 300);
+                await new Promise(res => setTimeout(res, 350));
+                await audioEngine.startTheme(prev);
             })();
             themeNameBeforeSecretRef.current = null;
         }
@@ -2125,3 +2135,4 @@ function App() {
 }
 
 export default App;
+
