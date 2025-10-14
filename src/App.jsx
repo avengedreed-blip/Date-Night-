@@ -708,7 +708,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal}) => {
+const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -1052,12 +1052,15 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
   onPointerDown={() => {
     if (!canSpin || spinLock.current) return;
     secretPressTimerRef.current = setTimeout(() => {
-      const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-      try { 
-        safeOpenModal('secretPrompt', { prompt: secretPrompt }); 
+        const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+        setGameState("secretLoveRound");
+        handleThemeChange("foreverPromise");
+        setSecretSticky(true);
+        setIsSecretThemeUnlocked(true);
+        safeOpenModal("secretPrompt", { prompt: secretRoundPrompt });
         if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
-      } catch (err) { /* no-op */ }
-      secretPressTimerRef.current = null;
+
+        secretPressTimerRef.current = null;
     }, 850);
   }}
   onPointerUp={() => {
@@ -1731,20 +1734,20 @@ function App() {
              ) {
                 setSecretRoundUsed(true);
                 const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-                safeOpenModal('secretPrompt', { prompt: secretPrompt });
+                setGameState("secretLoveRound");
+                handleThemeChange("foreverPromise");
                 setSecretSticky(true);
                 setIsSecretThemeUnlocked(true);
-                handleThemeChange('foreverPromise');
-                setGameState('secretLoveRound');
+                safeOpenModal("secretPrompt", { prompt: secretPrompt });
              }
         }, 100);
 
         if (isExtremeMode || gameState === 'secretLoveRound') {
             setIsExtremeMode(false);
             setExtremeRoundSource(null);
-            if (!(gameState === 'secretLoveRound' && secretSticky)) {
-                handleThemeChange(previousThemeRef.current || 'velourNights');
-              }
+            if (!(isSecretThemeUnlocked && secretSticky)) {
+                handleThemeChange(previousThemeRef.current || "velourNights");
+            }
         }
 
         const newRoundCount = roundCount + 1;
@@ -1774,7 +1777,7 @@ function App() {
                 triggerExtremeRound('random');
             }
         }
-    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal]);
+    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal, isSecretThemeUnlocked]);
 
     const handleCloseModal = useCallback(() => { 
         audioEngine.playModalClose();
@@ -1935,7 +1938,7 @@ function App() {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} safeOpenModal={safeOpenModal} />
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} safeOpenModal={safeOpenModal} handleThemeChange={handleThemeChange} setGameState={setGameState} setSecretSticky={setSecretSticky} setIsSecretThemeUnlocked={setIsSecretThemeUnlocked} />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
