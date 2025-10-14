@@ -414,7 +414,8 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
             velvetCarnival: { num: isMobile ? 100 : 150, palette: ['#FFD700', '#FF4500', '#FFFFFF', '#F777B6'], type: 'confetti' },
             starlitAbyss: { num: isMobile ? 150 : 250, palette: ['#FFFFFF', '#E6E6FA', '#D8BFD8'], type: 'star' },
             crimsonFrenzy: { num: isMobile ? 80 : 120, palette: ['#FFD700', '#DC2626', '#FF4500'], type: 'spark' },
-            lavenderPromise: { num: isMobile ? 120 : 280, palette: ['#b8a1ff', '#e2d4ff', '#f2e6ff'], type: 'slowFloat' }
+            lavenderPromise: { num: isMobile ? 120 : 280, palette: ['#b8a1ff', '#e2d4ff', '#f2e6ff'], type: 'slowFloat' },
+            foreverPromise: { num: isMobile ? 120 : 280, palette: ['#B88BFF', '#E8D8FF', '#6B45C6'], type: 'slowFloat' }
         };
 
         const activeConfig = themeConfig[currentTheme] || themeConfig.velourNights;
@@ -628,48 +629,15 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
         window.addEventListener('resize', resizeConfetti);
         resizeConfetti();
         
-        
-    const themeProfiles = {
-        velourNights:  { bgClass: 'theme-velour-nights-bg' },
-        lotusDreamscape: { bgClass: 'theme-lotus-dreamscape-bg' },
-        velvetCarnival: { bgClass: 'theme-velvet-carnival-bg' },
-        starlitAbyss: { bgClass: 'theme-starlit-abyss-bg' },
-        crimsonFrenzy: { bgClass: 'theme-crimson-frenzy-bg' },
-        lavenderPromise: { bgClass: 'theme-lavender-promise-bg' },
-        foreverPromise: { bgClass: 'theme-lavender-promise-bg' } // uses stronger lavender too
-    };
-    
-const themePalettes = {
+        const themePalettes = {
             velourNights: ['#F777B6', '#FFD700', '#FFFFFF'],
             lotusDreamscape: ['#6A5ACD', '#FFFFFF', '#ADD8E6'],
             velvetCarnival: ['#FFD700', '#FF4500', '#FFFFFF'],
             starlitAbyss: ['#FFFFFF', '#E6E6FA', '#D8BFD8'],
-            crimsonFrenzy: ['#FFD700', '#DC2626', '#FFFFFF']
-        
-            , lavenderPromise: { 
-                rim: { base: '#B48CFF', high: '#DCC6FF', low: '#6E46C6' }, 
-                slices: {
-                    DARE:  { base: "#C89CFF", high: "#E9D9FF", low: "#7C54D1" },
-                    KISS:  { base: "#B78BFA", high: "#E4D2FF", low: "#6E46C6" },
-                    SHARE: { base: "#CDA8FF", high: "#F0E6FF", low: "#7A4ED4" },
-                    WILD:  { base: "#A97DF2", high: "#DEC9FF", low: "#6A3DBE" },
-                    TRUTH: { base: "#C39BFF", high: "#EAD7FF", low: "#7548C9" },
-                    TRIVIA:{ base: "#D1B3FF", high: "#F3ECFF", low: "#8054D6" }
-                } 
-            }
-    
-        , foreverPromise: { 
-            rim: { base: '#B88BFF', high: '#E8D8FF', low: '#6B45C6' }, 
-            slices: {
-                DARE:  { base: "#C79BFF", high: "#EFDEFF", low: "#774BD0" },
-                KISS:  { base: "#BA8DFA", high: "#EADAFF", low: "#6F47C8" },
-                SHARE: { base: "#D0A9FF", high: "#F3E9FF", low: "#7B51D5" },
-                WILD:  { base: "#AF7BF2", high: "#E2CBFF", low: "#6A3EC0" },
-                TRUTH: { base: "#C49AFF", high: "#EED6FF", low: "#7446C7" },
-                TRIVIA:{ base: "#D7B7FF", high: "#F7F0FF", low: "#8055D8" }
-            } 
-        }
-    };
+            crimsonFrenzy: ['#FFD700', '#DC2626', '#FFFFFF'],
+            lavenderPromise: ['#b8a1ff', '#e2d4ff', '#f2e6ff'],
+            foreverPromise: ['#B88BFF', '#E8D8FF', '#6B45C6']
+        };
         const colors = themePalettes[theme] || themePalettes.velourNights;
 
         const particles = [];
@@ -740,7 +708,7 @@ const themePalettes = {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled, safeOpenModal}) => {
+const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -782,7 +750,9 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             lotusDreamscape: { rim: { base: '#C0C0C0', high: '#E6E6FA', low: '#5A5A7A' }, slices: { DARE: { base: "#DA70D6", high: "#FFB7FF", low: "#5A2D6A" }, TRUTH: { base: "#4169E1", high: "#7AA2FF", low: "#1A1A66" }, TRIVIA: { base: "#C0C0C0", high: "#E6E6FA", low: "#5A5A7A" } } },
             velvetCarnival: { rim: { base: '#FF4500', high: '#FF944D', low: '#662200' }, slices: { DARE: { base: "#FF4500", high: "#FF944D", low: "#662200" }, TRUTH: { base: "#9B111E", high: "#FF4C5B", low: "#400000" }, TRIVIA: { base: "#D4AF37", high: "#FFD700", low: "#7A5C00" } } },
             starlitAbyss: { rim: { base: '#4C4A9E', high: '#8A2BE2', low: '#1C1030' }, slices: { DARE: { base: "#483D8B", high: "#8A2BE2", low: "#1C1030" }, TRUTH: { base: "#191970", high: "#4169E1", low: "#0A0A33" }, TRIVIA: { base: "#6C5CE7", high: "#A29BFE", low: "#2D3436" } } },
-            crimsonFrenzy: { rim: { base: '#8B0000', high: '#DC143C', low: '#3D0000' }, slices: { DARE: { base: '#DC143C', high: '#FF6F91', low: '#7A1C1C' }, TRUTH: { base: "#483D8B", high: "#8A2BE2", low: "#1C1030" }, TRIVIA: { base: "#D4AF37", high: "#FFD700", low: "#7A5C00" } } }
+            crimsonFrenzy: { rim: { base: '#8B0000', high: '#DC143C', low: '#3D0000' }, slices: { DARE: { base: '#DC143C', high: '#FF6F91', low: '#7A1C1C' }, TRUTH: { base: "#483D8B", high: "#8A2BE2", low: "#1C1030" }, TRIVIA: { base: "#D4AF37", high: "#FFD700", low: "#7A5C00" } } },
+            lavenderPromise: { rim: { base: '#B48CFF', high: '#DCC6FF', low: '#6E46C6' }, slices: { DARE: { base: "#C89CFF", high: "#E9D9FF", low: "#7C54D1" }, TRUTH: { base: "#C39BFF", high: "#EAD7FF", low: "#7548C9" }, TRIVIA: { base: "#D1B3FF", high: "#F3ECFF", low: "#8054D6" } } },
+            foreverPromise: { rim: { base: '#B88BFF', high: '#E8D8FF', low: '#6B45C6' }, slices: { DARE: { base: "#C79BFF", high: "#EFDEFF", low: "#774BD0" }, TRUTH: { base: "#C49AFF", high: "#EED6FF", low: "#7446C7" }, TRIVIA: { base: "#D7B7FF", high: "#F7F0FF", low: "#8055D8" } } }
         };
 
         const activePalette = themePalettes[currentTheme] || themePalettes.velourNights;
@@ -959,7 +929,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             // This block guarantees the spin state is reset, even if upstream code throws an error.
             setIsSpinning(false);
             setIsPointerSettling(true);
-      setTimeout(() => { setIsPointerSettling(false); if (typeof onPointerSettled === 'function') onPointerSettled(); }, 500);
+      setTimeout(() => { setIsPointerSettling(false); }, 500);
             spinLock.current = false;
             // Failsafe redundancy: directly reset the master spin lock if the normal prompt queue fails.
             setIsSpinInProgress(false);
@@ -1113,16 +1083,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
 <motion.button
                     aria-label="Spin"
                     className="spin-button" onContextMenu={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                        // Suppress normal spin if a secret prompt just opened
-                        if (Date.now() - (secretPromptOpenAt?.t || 0) < 1200) { return; }
-                        // Let tap handler run first; if it consumes the event, don't spin.
-                        if (!handleWheelTap(e)) {
-                            handleSpin();
-                        }
-                    }}
-                    // The disabled attribute is removed to allow the triple-tap to register even when a spin is not allowed.
-                    // The handleSpin function itself contains the necessary guards.
+                    onClick={handleSpin}
                     whileTap={{ scale: 0.95 }}
                 >
                     {isSpinning ? <SpinLoader /> : 'SPIN'}
@@ -1406,12 +1367,15 @@ const EditorModal = ({ isOpen, onClose, prompts: initialPrompts, onReset, active
         </Modal>
     );
 };
-const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, onMuteToggle, onEditPrompts, currentTheme, onThemeChange, userId, onRestart, onQuit, activeVisualTheme, reducedMotion, onReducedMotionToggle }) => {
+const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, onMuteToggle, onEditPrompts, currentTheme, onThemeChange, onRestart, onQuit, activeVisualTheme, reducedMotion, onReducedMotionToggle, canUseForeverTheme }) => {
     const themes = [
         { id: 'velourNights', name: 'Velour Nights', colors: ['#F777B6', '#FFD700', '#6A0DAD'] },
         { id: 'lotusDreamscape', name: 'Lotus Dreamscape', colors: ['#6A5ACD', '#FFFFFF', '#ADD8E6'] },
         { id: 'velvetCarnival', name: 'Velvet Carnival', colors: ['#FFD700', '#FF4500', '#9B111E'] },
         { id: 'starlitAbyss', name: 'Starlit Abyss', colors: ['#FFFFFF', '#E6E6FA', '#483D8B'] },
+        ...(canUseForeverTheme ? [
+            { id: 'foreverPromise', name: 'Forever Promise', colors: ['#B88BFF','#E8D8FF','#6B45C6'] }
+          ] : [])
     ];
     return (
     <Modal isOpen={isOpen} onClose={onClose} title="Settings" activeVisualTheme={activeVisualTheme}>
@@ -1515,16 +1479,13 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
-    const [modalState, setModalState] = useState({ type: null, data: {}, isClosing: false });
-
-    
+    const [modalState, setModalState] = useState({ type: null, data: {} });
     const modalStateRef = useRef(modalState);
-
     useEffect(() => {
         modalStateRef.current = modalState;
     }, [modalState]);
-
-const initialSettings = getInitialSettings();
+    
+    const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
     const [settings, setSettings] = useState(initialSettings.volumes);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(initialSettings.reducedMotion);
@@ -1541,39 +1502,16 @@ const initialSettings = getInitialSettings();
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiOrigin, setConfettiOrigin] = useState({x: 0.5, y: 0.5 });
     const [isSpinInProgress, setIsSpinInProgress] = useState(false);
-    const [queuedPrompt, setQueuedPrompt] = useState(null);
-
-    useEffect(() => {
-        if (!queuedPrompt) return;
-        // single-shot open; keep a short lock so user can't re-spin before mount
-        modalInFlightRef.current = true;
-        const modalType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
-        const timer = setTimeout(() => {
-            safeOpenModal(modalType, queuedPrompt);
-            setTimeout(() => {
-                setQueuedPrompt(null);
-                setTimeout(() => { modalInFlightRef.current = false; }, 350);
-            }, 250);
-        }, 220);
-        return () => clearTimeout(timer);
-    }, [queuedPrompt, safeOpenModal]);
-    
-
     const [pendingExtremeRound, setPendingExtremeRound] = useState(null);
     const [audioInitFailed, setAudioInitFailed] = useState(false);
     const [gameState, setGameState] = useState('unlock');
     const [isSecretThemeUnlocked, setIsSecretThemeUnlocked] = useState(false);
+    const [secretSticky, setSecretSticky] = useState(false);
     const [players, setPlayers] = useState({ p1: 'Player 1', p2: 'Player 2' });
     const [currentPlayer, setCurrentPlayer] = useState('p1');
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
     const mainContentRef = useRef(null);
-const pendingPromptRef = useRef(null);
-const pointerFallbackRef = useRef(null);
-const handlePointerSettled = useCallback(() => {
-  if (pointerFallbackRef.current) { clearTimeout(pointerFallbackRef.current); pointerFallbackRef.current = null; }
-  if (pendingPromptRef.current) { setQueuedPrompt(pendingPromptRef.current); pendingPromptRef.current = null; }
-}, []);
 
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
@@ -1584,7 +1522,8 @@ const handlePointerSettled = useCallback(() => {
         velvetCarnival: { bg: 'theme-velvet-carnival-bg', titleText: 'text-white', titleShadow: '#FFD700', themeClass: 'theme-velvet-carnival' },
         starlitAbyss: { bg: 'theme-starlit-abyss-bg', titleText: 'text-white', titleShadow: '#8A2BE2', themeClass: 'theme-starlit-abyss' },
         crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' },
-        lavenderPromise: { bg: 'theme-lavender-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-lavender-promise' }
+        lavenderPromise: { bg: 'theme-lavender-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-lavender-promise' },
+        foreverPromise: { bg: 'theme-forever-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-forever-promise' },
     };
     const activeVisualTheme = visualThemes[currentTheme] || visualThemes.velourNights;
     const activeBackgroundClass = visualThemes[backgroundTheme]?.bg || visualThemes.velourNights.bg;
@@ -1660,66 +1599,10 @@ const handlePointerSettled = useCallback(() => {
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
+        if (modalStateRef.current?.type) return; // prevent stacking
         if (type === 'secretPrompt') { try { secretPromptOpenAt.t = Date.now(); } catch {} }
-        // Failsafe: Ensure any modal opening clears the spin lock to prevent deadlocks.
-        setIsSpinInProgress(false);
-        clearTimeout(turnIntroTimeoutRef.current);
-        setModalState(current => {
-            if (current.type && current.type !== 'closing') {
-                console.warn(`Modal race condition blocked: Tried to open '${type}' while '${current.type}' was active.`);
-                return current;
-            }
-            return { type, data, isClosing: false };
-        });
-    }, []);
-    
-        useEffect(() => {
-        if (!queuedPrompt) return;
-
-        modalInFlightRef.current = true;
-        // Ensure prompt has a stable id to ack when mounted
-        if (!queuedPrompt._id) {
-            setQueuedPrompt(prev => prev ? ({ ...prev, _id: (Math.random().toString(36).slice(2) + Date.now().toString(36)) }) : prev);
-            return;
-        }
-        let cancelled = false;
-        let attempts = 0;
-        const expectedType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
-
-        const tryOpen = () => {
-            if (cancelled) return;
-            // Ack: modal mounted with the same id
-            const sameId = modalState && modalStateRef.current?.data && modalStateRef.current?.data._id === queuedPrompt._id;
-            if (modalStateRef.current?.type === expectedType && sameId) {
-                setIsSpinInProgress(false);
-                setQueuedPrompt(null);
-                return;
-            }
-            // Try to open when no blocking modal, otherwise retry shortly
-            if (!modalStateRef.current?.type || modalStateRef.current?.type === 'closing') {
-                requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
-            }
-            attempts += 1;
-            if (attempts < 12) {
-                setTimeout(tryOpen, 150);
-            } else {
-                // Give it one last push in case a transient state blocked us
-                requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
-                setTimeout(() => {
-                    const mounted = modalStateRef.current?.type === expectedType && modalStateRef.current?.data && modalStateRef.current?.data._id === queuedPrompt._id;
-                    if (mounted) {
-                        setQueuedPrompt(null);
-                        setIsSpinInProgress(false);
-                    }
-                }, 200);
-            }
-        };
-
-        // Small delay provides a pleasant beat before showing the modal
-        const timer = setTimeout(tryOpen, 200);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [queuedPrompt, modalState.type, modalState.isClosing, modalState.data, safeOpenModal]);
-
+        setModalState({ type, data });
+      }, []);
 
     useEffect(() => { 
         if (window.Tone) { 
@@ -1763,10 +1646,10 @@ const handlePointerSettled = useCallback(() => {
         const next = themeId;
         setCurrentTheme(prev => (previousThemeRef.current = prev, next));
         const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
-        try { await audioEngine.ensure?.(); } catch {}
+        try { if(audioEngine.ensure) await audioEngine.ensure(); } catch {}
         try { await audioEngine.startTheme(audioTheme); } catch {} 
     
-}, [setCurrentTheme]);
+}, [setCurrentTheme, previousThemeRef]);
 
     const triggerExtremeRound = useCallback((source) => {
         const wheelEl = mainContentRef.current?.querySelector('.spin-button');
@@ -1839,7 +1722,6 @@ const handlePointerSettled = useCallback(() => {
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const activePlayerName = players[nextPlayerId];
 
-        // This logic remains the same, but the secret prompt is now queued differently.
         setTimeout(() => {
              if (
                  gameState !== 'secretLoveRound' &&
@@ -1849,8 +1731,7 @@ const handlePointerSettled = useCallback(() => {
              ) {
                 setSecretRoundUsed(true);
                 const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-                // The queued prompt now correctly has type: 'secret'
-                setQueuedPrompt(secretPrompt);
+                safeOpenModal('secretPrompt', { prompt: secretPrompt });
                 setSecretSticky(true);
                 setIsSecretThemeUnlocked(true);
                 handleThemeChange('foreverPromise');
@@ -1861,7 +1742,9 @@ const handlePointerSettled = useCallback(() => {
         if (isExtremeMode || gameState === 'secretLoveRound') {
             setIsExtremeMode(false);
             setExtremeRoundSource(null);
-            if (!(gameState === 'secretLoveRound' && secretSticky)) handleThemeChange(previousThemeRef.current || 'velourNights');
+            if (!(gameState === 'secretLoveRound' && secretSticky)) {
+                handleThemeChange(previousThemeRef.current || 'velourNights');
+              }
         }
 
         const newRoundCount = roundCount + 1;
@@ -1891,7 +1774,7 @@ const handlePointerSettled = useCallback(() => {
                 triggerExtremeRound('random');
             }
         }
-    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed]);
+    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, currentTheme, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal]);
 
     const handleCloseModal = useCallback(() => { 
         audioEngine.playModalClose();
@@ -1925,7 +1808,7 @@ const handlePointerSettled = useCallback(() => {
         if (extremeRoundSource === 'spark' && (roundCount + 1) % 5 === 0) {
             setTimeout(() => setPulseLevel(0), 1000);
         }
-    }, [extremeRoundSource, roundCount]);
+    }, [extremeRoundSource, roundCount, handleThemeChange]);
 
     const pickPrompt = useCallback((category, list) => {
         const recent = recentPrompts[category] || [];
@@ -1935,28 +1818,24 @@ const handlePointerSettled = useCallback(() => {
         return choice;
     }, [recentPrompts]);
     
-    const handleSpinFinish = useCallback((category) =>{
-const { truthPrompts, darePrompts, triviaQuestions } = prompts;
-const list =
-  category === 'truth'
-    ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy])
-    : category === 'dare'
-    ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
-    : [...triviaQuestions.normal];
+    const handleSpinFinish = useCallback((category) => {
+        const { truthPrompts, darePrompts, triviaQuestions } = prompts;
+        const list =
+          category === 'truth'
+            ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy])
+            : category === 'dare'
+            ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
+            : [...triviaQuestions.normal];
 
-const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
-const text = pickPrompt(category, validList);
-const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
+        const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
+        const text = pickPrompt(category, validList);
+        const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
 
-pendingPromptRef.current = { _id: (Math.random().toString(36).slice(2) + Date.now().toString(36)), title, text, type: category };
-if (pointerFallbackRef.current) clearTimeout(pointerFallbackRef.current);
-pointerFallbackRef.current = setTimeout(() => {
-  if (pendingPromptRef.current) {
-    setQueuedPrompt(pendingPromptRef.current);
-    pendingPromptRef.current = null;
-  }
-}, 1000);
-}, [prompts, isExtremeMode, pickPrompt]);
+        const prompt = { title, text, type: category };
+        if (!prompt) return;
+        safeOpenModal("prompt", prompt);
+
+    }, [prompts, isExtremeMode, pickPrompt, safeOpenModal]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -1998,34 +1877,14 @@ pointerFallbackRef.current = setTimeout(() => {
         setSecretRoundUsed(false);
         setModalState({ type: null });
         setGameState('onboarding_intro');
+        setSecretSticky(false);
+        setIsSecretThemeUnlocked(false);
     }, []);
 
     const handleQuitGame = useCallback(() => {
         handleRestartGame();
         setGameState('unlock');
     }, [handleRestartGame]);
-    
-    const handleSecretPreviewTap = useRef({ count: 0, timer: null });
-    const handleWheelTap = (e) => {
-    // Allow triple-tap even if the button is logically disabled for spinning,
-    // but suppress while a modal is open, a prompt is queued, or an actual spin is in progress.
-    if ((modalState.type && modalState.type !== 'closing') || queuedPrompt || isSpinInProgress) return false;
-
-    e.stopPropagation();
-    const state = handleSecretPreviewTap.current;
-    state.count += 1;
-    clearTimeout(state.timer);
-    state.timer = setTimeout(() => (state.count = 0), 750);
-
-    if (state.count >= 3) {
-        state.count = 0;
-        clearTimeout(state.timer);
-        const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-        safeOpenModal('secretPrompt', { prompt: secretPrompt });
-        return true; // Event consumed, prevents spin
-    }
-    return false; // Event not consumed
-};
     
     const renderContent = () => {
         const onboardingProps = { activeVisualTheme };
@@ -2039,7 +1898,7 @@ pointerFallbackRef.current = setTimeout(() => {
 
         if (isLoading) { return <div className="flex items-center justify-center h-screen"><p className="text-[#FFD700] text-3xl font-['Great_Vibes'] animate-pulse">Setting the Mood...</p></div>; }
         
-        const canSpin = !isSpinInProgress && (!modalState.type || modalState.type === 'closing') && !queuedPrompt && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
+        const canSpin = !isSpinInProgress && (!modalState.type || modalState.type === 'closing') && (gameState === 'playing' || (gameState === 'extremeRound' && extremeModeReady));
 
         return (
             <AnimatePresence mode="wait" initial={false}>
@@ -2076,7 +1935,7 @@ pointerFallbackRef.current = setTimeout(() => {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} safeOpenModal={safeOpenModal} />
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} safeOpenModal={safeOpenModal} />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
@@ -2178,8 +2037,25 @@ pointerFallbackRef.current = setTimeout(() => {
                     <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "settings" && (
-                    <SettingsModal key="settings" isOpen={true} onClose={() = availableThemes={Object.keys(themeProfiles).filter(t => t !== 'foreverPromise' ? true : isSecretThemeUnlocked)}> setModalState({ type: null })} settings={settings} onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))} isMuted={isMuted} onMuteToggle={handleToggleMute} onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })} onResetPrompts={() => setModalState({ type: "confirmReset" })} onThemeChange={handleThemeChange} currentTheme={currentTheme} onRestart={() => setModalState({ type: "confirmRestart" })} onQuit={() => setModalState({ type: "confirmQuit" })} activeVisualTheme={activeVisualTheme} reducedMotion={prefersReducedMotion} onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)} />
-                )}
+                    <SettingsModal
+                      key="settings"
+                      isOpen={true}
+                      onClose={() => setModalState({ type: null })}
+                      settings={settings}
+                      onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
+                      isMuted={isMuted}
+                      onMuteToggle={handleToggleMute}
+                      onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })}
+                      onThemeChange={handleThemeChange}
+                      currentTheme={currentTheme}
+                      onRestart={() => setModalState({ type: "confirmRestart" })}
+                      onQuit={() => setModalState({ type: "confirmQuit" })}
+                      activeVisualTheme={activeVisualTheme}
+                      reducedMotion={prefersReducedMotion}
+                      onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)}
+                      canUseForeverTheme={isSecretThemeUnlocked}
+                    />
+                  )}
                 {modalState.type === "confirmReset" && (
                     <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
                 )}
@@ -2196,3 +2072,4 @@ pointerFallbackRef.current = setTimeout(() => {
 }
 
 export default App;
+

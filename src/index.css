@@ -43,6 +43,7 @@ body {
     --theme-shadow: #0e0014;
     --meter-stop-0: #b98aff;
     --meter-stop-3: #f777b6;
+    --theme-label: #EAD7FF;
   }
   .theme-starlit-abyss {
     --theme-highlight: #9ebeff;
@@ -50,6 +51,7 @@ body {
     --theme-shadow: #030308;
     --meter-stop-0: #27203e;
     --meter-stop-3: #8ca6ff;
+    --theme-label: #D4DFFF;
   }
   .theme-crimson-frenzy {
     --theme-highlight: #ffb3b3;
@@ -57,6 +59,7 @@ body {
     --theme-shadow: #0a0000;
     --meter-stop-0: #dc143c;
     --meter-stop-3: #ff6f91;
+    --theme-label: #FFD4D4;
   }
   .theme-velvet-carnival {
     --theme-highlight: #ffd700;
@@ -64,6 +67,7 @@ body {
     --theme-shadow: #0a0400;
     --meter-stop-0: #ff7f50;
     --meter-stop-3: #ff4500;
+    --theme-label: #FFE4B5;
   }
   .theme-lotus-dreamscape {
     --theme-highlight: #c0c0ff;
@@ -71,6 +75,7 @@ body {
     --theme-shadow: #09070f;
     --meter-stop-0: #9aa4ff;
     --meter-stop-3: #e6e6fa;
+    --theme-label: #E6E6FA;
   }
   .theme-lavender-promise {
     --theme-highlight: #e2d4ff;
@@ -78,6 +83,15 @@ body {
     --theme-shadow: #2a2540;
     --meter-stop-0: #b8a1ff;
     --meter-stop-3: #f2e6ff;
+    --theme-label: #F0E6FF;
+  }
+  .theme-forever-promise {
+    --theme-highlight: #e8d8ff;
+    --theme-base: #6b45c6;
+    --theme-shadow: #3a257a;
+    --meter-stop-0: #b88bff;
+    --meter-stop-3: #e8d8ff;
+    --theme-label: #F3ECFF;
   }
 }
 
@@ -112,6 +126,15 @@ body {
 
 .theme-lotus-dreamscape-bg {
   background: linear-gradient(145deg, #1a1632 0%, #2d2447 60%, #191526 100%)
+}
+
+.theme-lavender-promise-bg {
+  background: linear-gradient(145deg, #544b80 0%, #b8a1ff 40%, #e4dfff 100%);
+}
+
+.theme-forever-promise-bg {
+    background: radial-gradient(58% 58% at 50% 36%, rgba(200, 180, 255, 0.98), rgba(160, 120, 255, 0.9) 55%, rgba(90, 60, 160, 0.95) 100%),
+    linear-gradient(180deg, rgba(80, 50, 150, 0.9), rgba(60, 30, 130, 0.96));
 }
 
 /* Particles above bg, below overlays */
@@ -649,11 +672,6 @@ body {
 /* ===========================================================
    THEME: LAVENDER PROMISE (ROMANTIC ONE-TIME ROUND)
    =========================================================== */
-.theme-lavender-promise-bg {
-  background: radial-gradient(58% 58% at 50% 36%, rgba(224, 202, 255, 0.98), rgba(196, 160, 255, 0.9) 55%, rgba(114, 76, 198, 0.95) 100%),
-              linear-gradient(180deg, rgba(112, 70, 188, 0.9), rgba(88, 48, 168, 0.96));
-}
-
 .lavender-particle {
   background: radial-gradient(circle, rgba(240,220,255,0.8), transparent 70%);
   animation: floatLavender 12s ease-in-out infinite;
@@ -669,25 +687,12 @@ body {
   box-shadow: 0 0 40px rgba(255, 150, 200, 0.55),
               inset 0 0 16px rgba(255, 255, 255, 0.25);
 }
-.secret-message .modal-header,
-.secret-message .modal-body {
-  font-family: 'Great Vibes', cursive;
-  letter-spacing: 0.3px;
-}
-
-.secret-message .modal-title {
-  font-family: 'Great Vibes', cursive;
-  font-size: clamp(1.3rem, 4vw, 1.6rem);
-  color: #ffe6f0;
-  text-shadow: 0 0 8px rgba(255, 150, 200, 0.5);
-}
 
 .secret-message .modal-body {
   animation: fadeInSecret 1.8s ease;
   text-align: justify;
   line-height: 1.6;
   color: rgba(255, 230, 240, 0.95);
-  font-size: 1.1rem;
   text-shadow: 0 0 6px rgba(255, 150, 200, 0.25);
   padding-bottom: env(safe-area-inset-bottom, 20px);
 }
@@ -711,5 +716,3 @@ header h1 {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
-
-:root { --theme-label: #EAD7FF; }
