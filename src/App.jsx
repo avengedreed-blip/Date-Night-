@@ -1482,7 +1482,14 @@ function App() {
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     const [modalState, setModalState] = useState({ type: null, data: {}, isClosing: false });
 
-    const initialSettings = getInitialSettings();
+    
+    const modalStateRef = useRef(modalState);
+
+    useEffect(() => {
+        modalStateRef.current = modalState;
+    }, [modalState]);
+
+const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
     const [settings, setSettings] = useState(initialSettings.volumes);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(initialSettings.reducedMotion);
@@ -1627,14 +1634,14 @@ const handlePointerSettled = useCallback(() => {
         const tryOpen = () => {
             if (cancelled) return;
             // Ack: modal mounted with the same id
-            const sameId = modalState && modalState.data && modalState.data._id === queuedPrompt._id;
-            if (modalState.type === expectedType && sameId) {
+            const sameId = modalState && modalStateRef.current?.data && modalStateRef.current?.data._id === queuedPrompt._id;
+            if (modalStateRef.current?.type === expectedType && sameId) {
                 setIsSpinInProgress(false);
                 setQueuedPrompt(null);
                 return;
             }
             // Try to open when no blocking modal, otherwise retry shortly
-            if (!modalState.type || modalState.type === 'closing') {
+            if (!modalStateRef.current?.type || modalStateRef.current?.type === 'closing') {
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
             }
             attempts += 1;
@@ -1644,7 +1651,7 @@ const handlePointerSettled = useCallback(() => {
                 // Give it one last push in case a transient state blocked us
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
                 setTimeout(() => {
-                    const mounted = modalState.type === expectedType && modalState.data && modalState.data._id === queuedPrompt._id;
+                    const mounted = modalStateRef.current?.type === expectedType && modalStateRef.current?.data && modalStateRef.current?.data._id === queuedPrompt._id;
                     if (mounted) {
                         setQueuedPrompt(null);
                         setIsSpinInProgress(false);
