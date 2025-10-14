@@ -1516,8 +1516,10 @@ function App() {
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
     const mainContentRef = useRef(null);
 
+    const [queuedPrompt, setQueuedPrompt] = useState(null);
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
+    const themeNameBeforeSecretRef = useRef(null);
     
     const visualThemes = {
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
@@ -1607,6 +1609,34 @@ function App() {
         setModalState({ type, data });
       }, []);
 
+    useEffect(() => {
+      if (!queuedPrompt) return;
+    
+      const promptId = queuedPrompt._id || Date.now();
+      let mounted = false;
+      const startTime = Date.now();
+      const timeout = 6000; // 6 seconds max retry window
+      const interval = 150;
+    
+      const tryOpen = () => {
+        if (mounted || !queuedPrompt) return;
+        const modal = modalStateRef.current;
+        if (!modal?.type && !modal?.isClosing) {
+          safeOpenModal("prompt", queuedPrompt);
+          mounted = true;
+          setQueuedPrompt(null);
+          return;
+        }
+        if (Date.now() - startTime < timeout) {
+          setTimeout(tryOpen, interval);
+        } else {
+          console.warn("Prompt open timed out after 6s");
+          setQueuedPrompt(null);
+        }
+      };
+      tryOpen();
+    }, [queuedPrompt, safeOpenModal]);
+
     useEffect(() => { 
         if (window.Tone) { 
             setScriptLoadState('loaded'); 
@@ -1636,19 +1666,39 @@ function App() {
     useEffect(() => {
         let t = currentTheme;
         if (isExtremeMode) t = 'crimsonFrenzy';
+        if (modalStateRef.current?.type === 'secretPrompt') t = 'lavenderPromise';
         if (t !== backgroundTheme) {
             setPrevBackgroundClass?.(activeBackgroundClass);
             setActiveBg?.(prev => (prev === 1 ? 2 : 1));
             setBackgroundTheme(t);
         }
-    }, [currentTheme, isExtremeMode, backgroundTheme, activeBackgroundClass]);
+    }, [currentTheme, isExtremeMode, backgroundTheme, activeBackgroundClass, modalState?.type]);
     
+    useEffect(() => {
+        if (modalState.type === 'secretPrompt' && !themeNameBeforeSecretRef.current) {
+            themeNameBeforeSecretRef.current = currentTheme;
+            (async () => {
+                await audioEngine.stopTheme();
+                setTimeout(() => audioEngine.startTheme('firstDanceMix'), 300);
+            })();
+        } else if (modalState.type !== 'secretPrompt' && modalState.type !== 'secretMessage' && themeNameBeforeSecretRef.current) {
+            const prev = themeNameBeforeSecretRef.current;
+            (async () => {
+                await audioEngine.stopTheme();
+                setTimeout(() => audioEngine.startTheme(prev), 300);
+            })();
+            themeNameBeforeSecretRef.current = null;
+        }
+    }, [modalState.type, currentTheme]);
 
 
     const handleThemeChange = useCallback(async (themeId) => {
         const next = themeId;
         setCurrentTheme(prev => (previousThemeRef.current = prev, next));
         const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
+        
+        if (audioTheme === 'firstDanceMix') return; 
+
         try { if(audioEngine.ensure) await audioEngine.ensure(); } catch {}
         try { await audioEngine.startTheme(audioTheme); } catch {} 
     
@@ -1836,9 +1886,9 @@ function App() {
 
         const prompt = { title, text, type: category };
         if (!prompt) return;
-        safeOpenModal("prompt", prompt);
+        setQueuedPrompt(prompt);
 
-    }, [prompts, isExtremeMode, pickPrompt, safeOpenModal]);
+    }, [prompts, isExtremeMode, pickPrompt]);
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
@@ -2075,4 +2125,3 @@ function App() {
 }
 
 export default App;
-
