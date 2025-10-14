@@ -705,7 +705,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled, safeOpenModal, onSecretRoundStart}) => {
+const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, handleWheelTap, onPointerSettled, safeOpenModal, onSecretRoundStart, modalInFlightRef}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -929,12 +929,12 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             // Failsafe redundancy: directly reset the master spin lock if the normal prompt queue fails.
             setIsSpinInProgress(false);
         }
-    }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
+    }, [finalizeSpin, playWheelStop, setIsSpinInProgress, onPointerSettled]);
 
 
     const handleSpin = useCallback(() => {
         const now = Date.now();
-        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
+        if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000 || (modalInFlightRef && modalInFlightRef.current)) {
             return;
         }
         lastSpinTimeRef.current = now;
@@ -1019,7 +1019,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             }
         };
         animationFrameRef.current = requestAnimationFrame(animate);
-    }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress]);
+    }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress, modalInFlightRef]);
 
 
     return (
@@ -1047,10 +1047,9 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
   onPointerDown={() => {
     if (!canSpin || spinLock.current) return;
     secretPressTimerRef.current = setTimeout(() => {
+      onSecretRoundStart();
       const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
       try { 
-        if (typeof onSecretRoundStart === 'function') { onSecretRoundStart(); }
-        if (typeof startSecretRound === 'function') { startSecretRound(); }
         safeOpenModal('secretPrompt', { prompt: secretPrompt }); 
         if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
       } catch (err) { /* no-op */ }
@@ -1483,17 +1482,8 @@ function App() {
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     const [modalState, setModalState] = useState({ type: null, data: {}, isClosing: false });
-
     
-    
-    const themeNameBeforeSecretRef = useRef(null);
-const modalStateRef = useRef(modalState);
-
-    useEffect(() => {
-        modalStateRef.current = modalState;
-    }, [modalState]);
-
-const initialSettings = getInitialSettings();
+    const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
     const [settings, setSettings] = useState(initialSettings.volumes);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(initialSettings.reducedMotion);
@@ -1519,18 +1509,19 @@ const initialSettings = getInitialSettings();
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
     const mainContentRef = useRef(null);
-const pendingPromptRef = useRef
-    const spinPromptFallbackRef = useRef({ t: null, id: 0 });
-(null);
-const pointerFallbackRef = useRef(null);
-const handlePointerSettled = useCallback(() => {
-  if (pointerFallbackRef.current) { clearTimeout(pointerFallbackRef.current); pointerFallbackRef.current = null; }
-  if (pendingPromptRef.current) { setQueuedPrompt(pendingPromptRef.current); pendingPromptRef.current = null; }
-}, []);
-
+    const pendingPromptRef = useRef(null);
+    const pointerFallbackRef = useRef(null);
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
     
+    // This ref acts as a short-term lock to prevent multiple modals from trying to open at once.
+    const modalInFlightRef = useRef(false);
+
+    const handlePointerSettled = useCallback(() => {
+        if (pointerFallbackRef.current) { clearTimeout(pointerFallbackRef.current); pointerFallbackRef.current = null; }
+        if (pendingPromptRef.current) { setQueuedPrompt(pendingPromptRef.current); pendingPromptRef.current = null; }
+    }, []);
+
     const visualThemes = {
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
         lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
@@ -1626,18 +1617,33 @@ const handlePointerSettled = useCallback(() => {
         });
     }, []);
     
+    // This effect replaces the complex polling logic for opening modals.
+    // It's a "fire-and-forget" approach with a short in-flight lock to prevent double-opens.
     useEffect(() => {
         if (!queuedPrompt) return;
+
+        // Guard against trying to open another modal while one is already in the process of opening.
+        if (modalInFlightRef.current) {
+            // Drop the prompt to prevent accidental double-opens from multiple spins.
+            return;
+        }
+
+        // Set a short-lived lock to prevent other actions (like another spin) from firing
+        // while the modal is opening and the UI is stabilizing.
+        modalInFlightRef.current = true;
+        setTimeout(() => { modalInFlightRef.current = false; }, 1200); // Lock for 1.2 seconds.
+
         const expectedType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
-        const withId = queuedPrompt._id ? queuedPrompt : { ...queuedPrompt, _id: (Math.random().toString(36).slice(2) + Date.now().toString(36)) };
-        const open = () => {
-            safeOpenModal(expectedType, withId);
-            // keep the queue set for a moment so canSpin stays false until modal mounts
-            setTimeout(() => setQueuedPrompt(null), 600);
-            setIsSpinInProgress(false);
-        };
-        const timer = setTimeout(open, 220);
-        return () => clearTimeout(timer);
+        
+        // Open the modal immediately.
+        safeOpenModal(expectedType, queuedPrompt);
+
+        // Clear the prompt from the queue after a short delay. This decouples the queue
+        // state from the modal's lifecycle, preventing re-renders from interfering.
+        setTimeout(() => {
+            setQueuedPrompt(null);
+        }, 300);
+
     }, [queuedPrompt, safeOpenModal]);
 
 
@@ -1666,45 +1672,43 @@ const handlePointerSettled = useCallback(() => {
     useEffect(() => { const convertToDb = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40); audioEngine.setMasterVolume(convertToDb(settings.masterVolume)); audioEngine.setMusicVolume(convertToDb(settings.musicVolume)); audioEngine.setSfxVolume(convertToDb(settings.sfxVolume)); }, [settings]);
     useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted]);
     
-useEffect(() => {
-  const convertVolume = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40);
-  audioEngine.setMasterVolume(convertToDb(settings.masterVolume));
-  audioEngine.setMusicVolume(convertToDb(settings.musicVolume));
-  audioEngine.setSfxVolume(convertToDb(settings.sfxVolume));
-  audioEngine.toggleMute(isMuted);
-}, [isMuted]); // <-- close useEffect properly
+    // This simplified effect makes the background visuals a direct reflection of the current theme state.
+    useEffect(() => {
+        // The visual background is either the standard current theme or the extreme mode theme.
+        const targetTheme = isExtremeMode ? 'crimsonFrenzy' : currentTheme;
 
-useEffect(() => {
-  let t = isExtremeMode ? 'crimsonFrenzy' : currentTheme;
-  if (!visualThemes[t]) t = 'velourNights';
-  if (t !== backgroundTheme) {
-    setPrevBackgroundClass(activeBackgroundClass);
-    setActiveBg((prev) => (prev === 1 ? 2 : 1));
-    setBackgroundTheme(t);
-  }
-}, [currentTheme, isExtremeMode]);
+        // Only update if the theme has actually changed to avoid unnecessary re-renders.
+        if (targetTheme !== backgroundTheme) {
+            // Set up for a cross-fade animation between themes.
+            setPrevBackgroundClass(activeBackgroundClass);
+            setActiveBg(prev => (prev === 1 ? 2 : 1));
+            setBackgroundTheme(targetTheme);
+        }
+    }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass]);
 
-
+    // This is now the single source of truth for changing the game's theme (visuals and audio).
     const handleThemeChange = useCallback(async (themeId) => {
-        const targetVisual = themeId;
-        const audioTarget = (themeId === 'lavenderPromise') ? 'firstDanceMix' : themeId;
-        if (currentTheme !== targetVisual) {
-            previousThemeRef.current = currentTheme;
-            setCurrentTheme(targetVisual);
+        // If the theme is already active, do nothing.
+        if (currentTheme === themeId) return;
+
+        // Map the visual theme 'lavenderPromise' to its specific audio track.
+        const audioTheme = themeId === 'lavenderPromise' ? 'firstDanceMix' : themeId;
+        
+        // On mobile, interacting with the page is required to start audio.
+        // We explicitly call Tone.start() here to ensure the secret theme's music
+        // plays reliably when triggered by a long-press.
+        if (audioTheme === 'firstDanceMix' && window.Tone && window.Tone.context.state !== 'running') {
+            await window.Tone.start();
         }
-        try {
-            await audioEngine.initialize();
-            await audioEngine.startTheme(audioTarget);
-        } catch (e) {
-            console.error('Audio theme switch failed', e);
-        }
+
+        // Store the previous theme so we can return to it after a special round.
+        previousThemeRef.current = currentTheme;
+        // Set the new visual theme.
+        setCurrentTheme(themeId);
+        // Start the corresponding audio theme.
+        audioEngine.startTheme(audioTheme);
+
     }, [currentTheme]);
-
-
-    const startSecretRound = useCallback(() => {
-        handleThemeChange('lavenderPromise');
-        setGameState('secretLoveRound');
-    }, [handleThemeChange]);
 
     const triggerExtremeRound = useCallback((source) => {
         const wheelEl = mainContentRef.current?.querySelector('.spin-button');
@@ -1777,7 +1781,6 @@ useEffect(() => {
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const activePlayerName = players[nextPlayerId];
 
-        // This logic remains the same, but the secret prompt is now queued differently.
         setTimeout(() => {
              if (
                  gameState !== 'secretLoveRound' &&
@@ -1787,9 +1790,8 @@ useEffect(() => {
              ) {
                 setSecretRoundUsed(true);
                 const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-                // The queued prompt now correctly has type: 'secret'
-                setQueuedPrompt(secretPrompt); 
                 handleThemeChange('lavenderPromise');
+                setQueuedPrompt(secretPrompt); 
                 setGameState('secretLoveRound');
              }
         }, 100);
@@ -1956,11 +1958,16 @@ pointerFallbackRef.current = setTimeout(() => {
         state.count = 0;
         clearTimeout(state.timer);
         const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+        handleThemeChange('lavenderPromise');
         safeOpenModal('secretPrompt', { prompt: secretPrompt });
         return true; // Event consumed, prevents spin
     }
     return false; // Event not consumed
 };
+
+    const handleSecretRoundStart = useCallback(() => {
+        handleThemeChange('lavenderPromise');
+    }, [handleThemeChange]);
     
     const renderContent = () => {
         const onboardingProps = { activeVisualTheme };
@@ -2011,7 +2018,21 @@ pointerFallbackRef.current = setTimeout(() => {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} safeOpenModal={safeOpenModal} onSecretRoundStart={startSecretRound} />
+                                <Wheel 
+                                    onSpinFinish={handleSpinFinish} 
+                                    playWheelSpinStart={audioEngine.playWheelSpinStart} 
+                                    playWheelTick={audioEngine.playWheelTick} 
+                                    playWheelStop={audioEngine.playWheelStopSound} 
+                                    setIsSpinInProgress={setIsSpinInProgress} 
+                                    currentTheme={currentTheme} 
+                                    canSpin={canSpin} 
+                                    reducedMotion={prefersReducedMotion} 
+                                    handleWheelTap={handleWheelTap}  
+                                    onPointerSettled={handlePointerSettled} 
+                                    safeOpenModal={safeOpenModal}
+                                    onSecretRoundStart={handleSecretRoundStart}
+                                    modalInFlightRef={modalInFlightRef}
+                                />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
@@ -2129,4 +2150,5 @@ pointerFallbackRef.current = setTimeout(() => {
         </div>
     );
 }
+
 export default App;
