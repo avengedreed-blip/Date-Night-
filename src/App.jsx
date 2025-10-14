@@ -1959,7 +1959,7 @@ pointerFallbackRef.current = setTimeout(() => {
         return true; // Event consumed, prevents spin
     }
     return false; // Event not consumed
-};};
+};
     
     const renderContent = () => {
         const onboardingProps = { activeVisualTheme };
@@ -2127,4 +2127,6 @@ pointerFallbackRef.current = setTimeout(() => {
             </MotionConfig>
         </div>
     );
+}
+
 export default App;
