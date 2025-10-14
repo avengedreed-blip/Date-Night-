@@ -1941,26 +1941,25 @@ pointerFallbackRef.current = setTimeout(() => {
     
     const handleSecretPreviewTap = useRef({ count: 0, timer: null });
     const handleWheelTap = (e) => {
-    // Ignore secret shortcut while spinning or blocked
-    if (!canSpinArg) return false;
+    // Allow triple-tap even if the button is logically disabled for spinning,
+    // but suppress while a modal is open, a prompt is queued, or an actual spin is in progress.
+    if ((modalState.type && modalState.type !== 'closing') || queuedPrompt || isSpinInProgress) return false;
 
-        e.stopPropagation();
-        // This must function even if the button is logically disabled for spinning
-        const state = handleSecretPreviewTap.current;
-        state.count += 1;
+    e.stopPropagation();
+    const state = handleSecretPreviewTap.current;
+    state.count += 1;
+    clearTimeout(state.timer);
+    state.timer = setTimeout(() => (state.count = 0), 750);
+
+    if (state.count >= 3) {
+        state.count = 0;
         clearTimeout(state.timer);
-        state.timer = setTimeout(() => (state.count = 0), 750);
-
-        if (state.count >= 3) {
-            state.count = 0;
-            clearTimeout(state.timer);
-            const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-            // Pass the full prompt object, including the 'type: "secret"' property
-            safeOpenModal('secretPrompt', { prompt: secretPrompt });
-            return true; // Event consumed, prevents spin
-        }
-        return false; // Event not consumed
-    };
+        const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+        safeOpenModal('secretPrompt', { prompt: secretPrompt });
+        return true; // Event consumed, prevents spin
+    }
+    return false; // Event not consumed
+};};
     
     const renderContent = () => {
         const onboardingProps = { activeVisualTheme };
@@ -2011,7 +2010,7 @@ pointerFallbackRef.current = setTimeout(() => {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} / safeOpenModal={safeOpenModal} />
+                                <Wheel onSpinFinish={handleSpinFinish} playWheelSpinStart={audioEngine.playWheelSpinStart} playWheelTick={audioEngine.playWheelTick} playWheelStop={audioEngine.playWheelStopSound} setIsSpinInProgress={setIsSpinInProgress} currentTheme={currentTheme} canSpin={canSpin} reducedMotion={prefersReducedMotion} handleWheelTap={handleWheelTap}  onPointerSettled={handlePointerSettled} safeOpenModal={safeOpenModal} />
                             }
                             <div className="relative mt-8">
                                 <PulseMeter level={pulseLevel} />
@@ -2128,6 +2127,4 @@ pointerFallbackRef.current = setTimeout(() => {
             </MotionConfig>
         </div>
     );
-}
-
 export default App;
