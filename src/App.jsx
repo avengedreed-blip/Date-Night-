@@ -1483,7 +1483,36 @@ function App() {
     const [modalState, setModalState] = useState({ type: null, data: {}, isClosing: false });
 
     
-    const modalStateRef = useRef(modalState);
+    
+    const themeNameBeforeSecretRef = useRef(null);
+    useEffect(() => {
+      const isSecret = modalState?.type === 'secretPrompt';
+
+      const startSecretMusic = async () => {
+        await audioEngine.initialize();
+        audioEngine.stopTheme();
+        audioEngine.startTheme('firstDanceMix');
+      };
+
+      const restorePreviousMusic = async () => {
+        if (!themeNameBeforeSecretRef.current) return;
+        const prev = themeNameBeforeSecretRef.current;
+        themeNameBeforeSecretRef.current = null;
+        await audioEngine.initialize();
+        audioEngine.stopTheme();
+        audioEngine.startTheme(prev);
+      };
+
+      if (isSecret) {
+        if (!themeNameBeforeSecretRef.current) {
+          themeNameBeforeSecretRef.current = currentTheme === 'lavenderPromise' ? 'velourNights' : currentTheme;
+        }
+        startSecretMusic();
+      } else {
+        restorePreviousMusic();
+      }
+    }, [modalState?.type]);
+const modalStateRef = useRef(modalState);
 
     useEffect(() => {
         modalStateRef.current = modalState;
