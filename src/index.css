@@ -89,10 +89,10 @@ body {
   }
   .theme-forever-promise {
     --theme-highlight: #e8d8ff;
-    --theme-base: #6b45c6;
+    --theme-base: #835cae;
     --theme-shadow: #3a257a;
     --meter-stop-0: #b88bff;
-    --meter-stop-3: #e8d8ff;
+    --meter-stop-3: #eeade6;
     --theme-label: #F3ECFF;
   }
 }

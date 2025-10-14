@@ -758,7 +758,14 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                 TRIVIA: { base: '#9C70FF', high: '#F3ECFF', low: '#5630B8' }
               }
             },
-            foreverPromise: { rim: { base: '#B88BFF', high: '#E8D8FF', low: '#6B45C6' }, slices: { DARE: { base: "#C79BFF", high: "#EFDEFF", low: "#774BD0" }, TRUTH: { base: "#C49AFF", high: "#EED6FF", low: "#7446C7" }, TRIVIA: { base: "#D7B7FF", high: "#F7F0FF", low: "#8055D8" } } }
+            foreverPromise: { 
+                rim: { base: '#835cae', high: '#e6e6fa', low: '#4F377A' }, 
+                slices: { 
+                    DARE: { base: "#835cae", high: "#eeade6", low: "#624A87" }, 
+                    TRUTH: { base: "#835cae", high: "#e6e6fa", low: "#624A87" }, 
+                    TRIVIA: { base: "#835cae", high: "#EADDF8", low: "#624A87" } 
+                } 
+            }
         };
 
         const activePalette = themePalettes[currentTheme] || themePalettes.velourNights;
@@ -1616,34 +1623,11 @@ function App() {
       }, []);
 
     useEffect(() => {
-      if (!queuedPrompt) return;
-    
-      const promptId = queuedPrompt._id || Date.now();
-      let mounted = false;
-      const startTime = Date.now();
-      const timeout = 6000;
-      const interval = 150;
-    
-      const tryOpen = () => {
-        if (mounted || !queuedPrompt) return;
-        const modal = modalStateRef.current;
-        if (!modal?.type && !modal?.isClosing) {
-          safeOpenModal("prompt", queuedPrompt);
-          mounted = true;
-          setQueuedPrompt(null);
-          return;
-        }
-        if (Date.now() - startTime < timeout) {
-          setTimeout(tryOpen, interval);
-        } else {
-          console.warn("Prompt open timed out after 6s");
-          setQueuedPrompt(null);
-        }
-      };
-    
-      // Delay to allow React to commit new state before polling
-      setTimeout(tryOpen, 20);
-    }, [queuedPrompt, safeOpenModal]);
+      if (queuedPrompt && !modalState.type) {
+        safeOpenModal("prompt", queuedPrompt);
+        setQueuedPrompt(null);
+      }
+    }, [queuedPrompt, modalState.type, safeOpenModal]);
 
     useEffect(() => { 
         if (window.Tone) { 
@@ -2135,4 +2119,5 @@ function App() {
 }
 
 export default App;
+
 
