@@ -650,9 +650,8 @@ body {
    THEME: LAVENDER PROMISE (ROMANTIC ONE-TIME ROUND)
    =========================================================== */
 .theme-lavender-promise-bg {
-  /* Deeper lavender gradient */
-  background: radial-gradient(60% 60% at 50% 35%, rgba(210, 184, 255, 0.95), rgba(176, 136, 255, 0.85) 55%, rgba(110, 70, 198, 0.92) 100%),
-              linear-gradient(180deg, rgba(100, 60, 170, 0.85), rgba(80, 40, 150, 0.95));
+  background: radial-gradient(58% 58% at 50% 36%, rgba(224, 202, 255, 0.98), rgba(196, 160, 255, 0.9) 55%, rgba(114, 76, 198, 0.95) 100%),
+              linear-gradient(180deg, rgba(112, 70, 188, 0.9), rgba(88, 48, 168, 0.96));
 }
 
 .lavender-particle {

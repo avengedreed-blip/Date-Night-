@@ -628,7 +628,18 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
         window.addEventListener('resize', resizeConfetti);
         resizeConfetti();
         
-        const themePalettes = {
+        
+    const themeProfiles = {
+        velourNights:  { bgClass: 'theme-velour-nights-bg' },
+        lotusDreamscape: { bgClass: 'theme-lotus-dreamscape-bg' },
+        velvetCarnival: { bgClass: 'theme-velvet-carnival-bg' },
+        starlitAbyss: { bgClass: 'theme-starlit-abyss-bg' },
+        crimsonFrenzy: { bgClass: 'theme-crimson-frenzy-bg' },
+        lavenderPromise: { bgClass: 'theme-lavender-promise-bg' },
+        foreverPromise: { bgClass: 'theme-lavender-promise-bg' } // uses stronger lavender too
+    };
+    
+const themePalettes = {
             velourNights: ['#F777B6', '#FFD700', '#FFFFFF'],
             lotusDreamscape: ['#6A5ACD', '#FFFFFF', '#ADD8E6'],
             velvetCarnival: ['#FFD700', '#FF4500', '#FFFFFF'],
@@ -646,6 +657,18 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
                     TRIVIA:{ base: "#D1B3FF", high: "#F3ECFF", low: "#8054D6" }
                 } 
             }
+    
+        , foreverPromise: { 
+            rim: { base: '#B88BFF', high: '#E8D8FF', low: '#6B45C6' }, 
+            slices: {
+                DARE:  { base: "#C79BFF", high: "#EFDEFF", low: "#774BD0" },
+                KISS:  { base: "#BA8DFA", high: "#EADAFF", low: "#6F47C8" },
+                SHARE: { base: "#D0A9FF", high: "#F3E9FF", low: "#7B51D5" },
+                WILD:  { base: "#AF7BF2", high: "#E2CBFF", low: "#6A3EC0" },
+                TRUTH: { base: "#C49AFF", high: "#EED6FF", low: "#7446C7" },
+                TRIVIA:{ base: "#D7B7FF", high: "#F7F0FF", low: "#8055D8" }
+            } 
+        }
     };
         const colors = themePalettes[theme] || themePalettes.velourNights;
 
@@ -1519,9 +1542,27 @@ const initialSettings = getInitialSettings();
     const [confettiOrigin, setConfettiOrigin] = useState({x: 0.5, y: 0.5 });
     const [isSpinInProgress, setIsSpinInProgress] = useState(false);
     const [queuedPrompt, setQueuedPrompt] = useState(null);
+
+    useEffect(() => {
+        if (!queuedPrompt) return;
+        // single-shot open; keep a short lock so user can't re-spin before mount
+        modalInFlightRef.current = true;
+        const modalType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
+        const timer = setTimeout(() => {
+            safeOpenModal(modalType, queuedPrompt);
+            setTimeout(() => {
+                setQueuedPrompt(null);
+                setTimeout(() => { modalInFlightRef.current = false; }, 350);
+            }, 250);
+        }, 220);
+        return () => clearTimeout(timer);
+    }, [queuedPrompt, safeOpenModal]);
+    
+
     const [pendingExtremeRound, setPendingExtremeRound] = useState(null);
     const [audioInitFailed, setAudioInitFailed] = useState(false);
     const [gameState, setGameState] = useState('unlock');
+    const [isSecretThemeUnlocked, setIsSecretThemeUnlocked] = useState(false);
     const [players, setPlayers] = useState({ p1: 'Player 1', p2: 'Player 2' });
     const [currentPlayer, setCurrentPlayer] = useState('p1');
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
@@ -1705,26 +1746,27 @@ const handlePointerSettled = useCallback(() => {
     useEffect(() => { const convertToDb = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40); audioEngine.setMasterVolume(convertToDb(settings.masterVolume)); audioEngine.setMusicVolume(convertToDb(settings.musicVolume)); audioEngine.setSfxVolume(convertToDb(settings.sfxVolume)); }, [settings]);
     useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted]);
     
+    
     useEffect(() => {
         let t = currentTheme;
-        if(isExtremeMode) t = 'crimsonFrenzy';
-        else if (gameState === 'secretLoveRound') t = 'lavenderPromise';
-
+        if (isExtremeMode) t = 'crimsonFrenzy';
         if (t !== backgroundTheme) {
-            setPrevBackgroundClass(activeBackgroundClass);
-            setActiveBg(prev => (prev === 1 ? 2 : 1));
+            setPrevBackgroundClass?.(activeBackgroundClass);
+            setActiveBg?.(prev => (prev === 1 ? 2 : 1));
             setBackgroundTheme(t);
         }
-    }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass, gameState]);
+    }, [currentTheme, isExtremeMode, backgroundTheme, activeBackgroundClass]);
+    
 
 
-    const handleThemeChange = useCallback((themeId) => {
-        if (currentTheme !== themeId) {
-            previousThemeRef.current = currentTheme;
-            setCurrentTheme(themeId);
-            audioEngine.startTheme(themeId);
-        }
-    }, [currentTheme]);
+    const handleThemeChange = useCallback(async (themeId) => {
+        const next = themeId;
+        setCurrentTheme(prev => (previousThemeRef.current = prev, next));
+        const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
+        try { await audioEngine.ensure?.(); } catch {}
+        try { await audioEngine.startTheme(audioTheme); } catch {} 
+    
+}, [setCurrentTheme]);
 
     const triggerExtremeRound = useCallback((source) => {
         const wheelEl = mainContentRef.current?.querySelector('.spin-button');
@@ -1737,7 +1779,7 @@ const handlePointerSettled = useCallback(() => {
         setShowPowerSurge(true);
         audioEngine.playExtremePrompt();
         previousThemeRef.current = currentTheme;
-        // audioEngine.startTheme('crimsonFrenzy'); // moved to intro close via handleThemeChange
+        //  // moved to intro close via handleThemeChange
         setShowConfetti(true);
         setExtremeRoundSource(source);
         safeOpenModal('extremeIntro');
@@ -1810,7 +1852,8 @@ const handlePointerSettled = useCallback(() => {
                 // The queued prompt now correctly has type: 'secret'
                 setQueuedPrompt(secretPrompt);
                 setSecretSticky(true);
-                handleThemeChange('lavenderPromise');
+                setIsSecretThemeUnlocked(true);
+                handleThemeChange('foreverPromise');
                 setGameState('secretLoveRound');
              }
         }, 100);
@@ -2135,7 +2178,7 @@ pointerFallbackRef.current = setTimeout(() => {
                     <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
                 )}
                 {modalState.type === "settings" && (
-                    <SettingsModal key="settings" isOpen={true} onClose={() => setModalState({ type: null })} settings={settings} onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))} isMuted={isMuted} onMuteToggle={handleToggleMute} onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })} onResetPrompts={() => setModalState({ type: "confirmReset" })} onThemeChange={handleThemeChange} currentTheme={currentTheme} onRestart={() => setModalState({ type: "confirmRestart" })} onQuit={() => setModalState({ type: "confirmQuit" })} activeVisualTheme={activeVisualTheme} reducedMotion={prefersReducedMotion} onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)} />
+                    <SettingsModal key="settings" isOpen={true} onClose={() = availableThemes={Object.keys(themeProfiles).filter(t => t !== 'foreverPromise' ? true : isSecretThemeUnlocked)}> setModalState({ type: null })} settings={settings} onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))} isMuted={isMuted} onMuteToggle={handleToggleMute} onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })} onResetPrompts={() => setModalState({ type: "confirmReset" })} onThemeChange={handleThemeChange} currentTheme={currentTheme} onRestart={() => setModalState({ type: "confirmRestart" })} onQuit={() => setModalState({ type: "confirmQuit" })} activeVisualTheme={activeVisualTheme} reducedMotion={prefersReducedMotion} onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)} />
                 )}
                 {modalState.type === "confirmReset" && (
                     <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
