@@ -1544,7 +1544,9 @@ const initialSettings = getInitialSettings();
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
     const mainContentRef = useRef(null);
-const pendingPromptRef = useRef(null);
+const pendingPromptRef = useRef
+    const spinPromptFallbackRef = useRef({ t: null, id: 0 });
+(null);
 const pointerFallbackRef = useRef(null);
 const handlePointerSettled = useCallback(() => {
   if (pointerFallbackRef.current) { clearTimeout(pointerFallbackRef.current); pointerFallbackRef.current = null; }
@@ -1657,7 +1659,7 @@ const handlePointerSettled = useCallback(() => {
             return;
         }
         let cancelled = false;
-        let attempts = 0; const deadline = Date.now() + 5000;
+        let attempts = 0;
         const expectedType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
 
         const tryOpen = () => {
@@ -1674,9 +1676,9 @@ const handlePointerSettled = useCallback(() => {
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
             }
             attempts += 1;
-            if (attempts < 30) {
+            if (attempts < 12) {
                 setTimeout(tryOpen, 150);
-            } else if (Date.now() < deadline) {
+            } else {
                 // Give it one last push in case a transient state blocked us
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
                 setTimeout(() => {
@@ -1722,14 +1724,15 @@ const handlePointerSettled = useCallback(() => {
     
     useEffect(() => {
         let t = currentTheme;
-        if (modalStateRef.current?.type === 'secretPrompt') t = 'lavenderPromise';
+        if (modalState?.type === 'secretPrompt') t = 'lavenderPromise';
         if(isExtremeMode) t = 'crimsonFrenzy';
         else if (gameState === 'secretLoveRound') t = 'lavenderPromise';
 
         if (t !== backgroundTheme) {
             setPrevBackgroundClass(activeBackgroundClass);
             setActiveBg(prev => (prev === 1 ? 2 : 1));
-            setBackgroundTheme(t);
+            
+        if (!visualThemes[t]) { t = currentTheme || 'velourNights'; }setBackgroundTheme(t);
         }
     }, [isExtremeMode, currentTheme, backgroundTheme, activeBackgroundClass, gameState]);
 
