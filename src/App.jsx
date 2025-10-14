@@ -1657,7 +1657,7 @@ const handlePointerSettled = useCallback(() => {
             return;
         }
         let cancelled = false;
-        let attempts = 0;
+        let attempts = 0; const deadline = Date.now() + 5000;
         const expectedType = queuedPrompt.type === 'secret' ? 'secretPrompt' : 'prompt';
 
         const tryOpen = () => {
@@ -1674,9 +1674,9 @@ const handlePointerSettled = useCallback(() => {
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
             }
             attempts += 1;
-            if (attempts < 12) {
+            if (attempts < 30) {
                 setTimeout(tryOpen, 150);
-            } else {
+            } else if (Date.now() < deadline) {
                 // Give it one last push in case a transient state blocked us
                 requestAnimationFrame(() => safeOpenModal(expectedType, queuedPrompt));
                 setTimeout(() => {
@@ -1722,6 +1722,7 @@ const handlePointerSettled = useCallback(() => {
     
     useEffect(() => {
         let t = currentTheme;
+        if (modalStateRef.current?.type === 'secretPrompt') t = 'lavenderPromise';
         if(isExtremeMode) t = 'crimsonFrenzy';
         else if (gameState === 'secretLoveRound') t = 'lavenderPromise';
 
