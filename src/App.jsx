@@ -1605,6 +1605,20 @@ function App() {
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
     const themeNameBeforeSecretRef = useRef(null);
+
+    // AudioContext autoplay warning fix
+    useEffect(() => {
+        const resumeAudioContext = () => {
+            if (Tone?.context?.state !== "running") {
+                Tone.context.resume();
+            }
+        };
+        document.addEventListener('click', resumeAudioContext, { once: true });
+
+        return () => {
+            document.removeEventListener('click', resumeAudioContext);
+        };
+    }, []);
     
     const visualThemes = {
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
@@ -1787,11 +1801,6 @@ function App() {
         if (isUnlockingAudio) return;
         setIsUnlockingAudio(true);
     
-        // [GeminiFix: AudioResume]
-        document.body.addEventListener("click", async () => {
-            if (window.Tone?.context?.state !== "running") await window.Tone.start();
-        }, { once: true });
-
         const attemptAudioInit = async () => {
             if (!window.Tone || !window.Tone.context) {
                 setScriptLoadState('error');
@@ -1846,7 +1855,7 @@ function App() {
             if (
                 gameState !== 'secretLoveRound' &&
                 typeof activePlayerName === 'string' &&
-                activePlayerName.toLowerCase() === 'katy' &&
+                (activePlayerName || "").toLowerCase() === 'katy' &&
                 !secretRoundUsed &&
                 Math.random() < 0.15
             ) {
@@ -2247,4 +2256,3 @@ function ModalManager({ modalState, onMountAck, handlePromptModalClose, handleCo
 
 
 export default App;
-
