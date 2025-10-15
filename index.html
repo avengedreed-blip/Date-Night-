@@ -22,16 +22,21 @@
     />
 
     <title>Date Night</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
     <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js');
-  }
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js');
-    });
-  }
-</script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(() => console.log('Service Worker registered'))
+            .catch(err => console.warn('Service Worker failed:', err));
+        });
+      }
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
