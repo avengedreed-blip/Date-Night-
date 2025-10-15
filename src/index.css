@@ -87,13 +87,14 @@ body {
     --theme-sheen: rgba(255, 160, 240, 0.55);
     --theme-shadow: rgba(25, 5, 45, 0.9);
   }
+  /* === Forever Promise (High Contrast Visual Overhaul) === */
   .theme-forever-promise {
-    --theme-highlight: #e8d8ff;
-    --theme-base: #835cae;
-    --theme-shadow: #3a257a;
-    --meter-stop-0: #b88bff;
-    --meter-stop-3: #eeade6;
-    --theme-label: #F3ECFF;
+    --theme-highlight: #f2aaff;     /* brighter rose-violet */
+    --theme-base: #4a1e5d;          /* deep plum base */
+    --theme-shadow: #2b134b;        /* darker vignette */
+    --meter-stop-0: #8c42c6;
+    --meter-stop-3: #d88bf2;
+    --theme-label: #ffffff;
   }
 }
 
@@ -135,8 +136,14 @@ body {
 }
 
 .theme-forever-promise-bg {
-    background: radial-gradient(58% 58% at 50% 36%, rgba(200, 180, 255, 0.98), rgba(160, 120, 255, 0.9) 55%, rgba(90, 60, 160, 0.95) 100%),
-    linear-gradient(180deg, rgba(80, 50, 150, 0.9), rgba(60, 30, 130, 0.96));
+  background:
+    radial-gradient(60% 60% at 50% 40%, rgba(230,160,255,0.95),
+                    rgba(140,60,200,0.9) 60%, rgba(60,20,120,0.92) 100%),
+    linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
+}
+
+.theme-forever-promise .wheel-canvas {
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
 }
 
 /* Particles above bg, below overlays */
@@ -721,4 +728,3 @@ header h1 {
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
-
