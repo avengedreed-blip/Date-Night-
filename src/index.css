@@ -77,7 +77,7 @@ body {
     --meter-stop-3: #e6e6fa;
     --theme-label: #E6E6FA;
   }
-  /* === Lavender Promise (Secret Round Theme) === */
+  /* === Lavender Promise === */
   .theme-lavender-promise {
     --theme-base: #2d0a4e;
     --theme-highlight: #f6a2ff;
@@ -88,7 +88,7 @@ body {
     --theme-sheen: rgba(255, 160, 240, 0.55);
     --theme-shadow: rgba(25, 5, 45, 0.9);
   }
-  /* === Forever Promise (High Contrast Visual Overhaul) === */
+  /* === Forever Promise === */
   .theme-forever-promise {
     --theme-highlight: #f2aaff;
     --theme-base: #4a1e5d;
@@ -154,7 +154,7 @@ body {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
-  z-index: 2;
+  z-index: 5;
   position: fixed;
   inset: 0;
 }
@@ -180,6 +180,7 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 9;
   background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, .6) 100%);
 }
 
@@ -252,8 +253,7 @@ body {
   align-items: center;
   justify-content: center;
   isolation: isolate;
-  /* stable stacking context */
-  z-index: 60;
+  z-index: 10;
 }
 
 /* wheel disc look */
@@ -279,7 +279,6 @@ body {
     0 0 40px rgba(255, 215, 0, .18);
   transform: perspective(700px) rotateX(10deg);
   overflow: hidden;
-  z-index: 55;
 }
 
 /* pointer: shell centers; child anim keeps tilt */
@@ -340,27 +339,17 @@ body {
   color: #fff;
   cursor: pointer;
   isolation: isolate;
-  background:
-    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, .45), rgba(255, 255, 255, .08)),
-    linear-gradient(145deg, rgba(255, 255, 255, .28), rgba(0, 0, 0, .55)),
-    radial-gradient(circle at 55% 75%, rgba(255, 255, 255, .2), rgba(0, 0, 0, .4));
-  border: 1.6px solid rgba(255, 255, 255, .35);
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, .65),
-    0 0 28px rgba(255, 255, 255, .22),
-    inset 0 0 22px rgba(255, 255, 255, .5),
-    inset 0 -10px 14px rgba(0, 0, 0, .55);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(0,0,0,0.45));
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 0 10px rgba(255,255,255,0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+  transition: box-shadow 0.2s ease;
 }
 
 .spin-button:hover {
-  box-shadow:
-    0 14px 40px rgba(0, 0, 0, .7),
-    0 0 32px rgba(255, 255, 255, .25),
-    inset 0 0 26px rgba(255, 255, 255, .55),
-    inset 0 -12px 16px rgba(0, 0, 0, .6);
+  box-shadow: 0 0 18px var(--theme-highlight);
 }
 
 .spin-button::after {
@@ -399,18 +388,8 @@ body {
   }
 }
 
-/* decorative shimmer (optional, if used) */
-.wheel-shimmer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: conic-gradient(from 0deg, rgba(255, 255, 255, .08), transparent 35%, transparent 65%, rgba(255, 255, 255, .08));
-  mix-blend-mode: overlay;
-  border-radius: 50%;
-}
-
 /* ===========================================================
-   PULSE METER (taller, centered, animated)
+   PULSE METER
    =========================================================== */
 .pulse-meter {
   position: relative;
@@ -418,49 +397,31 @@ body {
   transform: translateX(-50%);
   margin-top: 1rem;
   width: clamp(280px, 80%, 400px);
-  height: 24px;
+  height: 22px;
   border-radius: 9999px;
   overflow: hidden;
-  z-index: 85;
-  background: linear-gradient(90deg, var(--meter-stop-0), var(--meter-stop-3));
-  box-shadow:
-    0 0 25px rgba(255, 255, 255, .18),
-    inset 0 1px 3px rgba(255, 255, 255, .2),
-    inset 0 -2px 4px rgba(0, 0, 0, .5);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.15);
   margin-bottom: 0.75rem;
 }
 
 .pulse-meter__fill {
-  position: absolute;
-  inset: 2px;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(0, 0, 0, .35), rgba(255, 255, 255, .08));
+  background: linear-gradient(90deg, var(--meter-stop-0), var(--meter-stop-3));
+  height: 100%;
+  transition: width 0.3s ease-out;
 }
 
 .pulse-meter__wave {
   position: absolute;
   inset: 0;
-  background: radial-gradient(60px 12px at 0 60%, rgba(0, 255, 200, .8), transparent 60%);
-  opacity: .8;
-  mix-blend-mode: screen;
-  animation: pulseWave 2.8s linear infinite;
+  opacity: 0.2;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0.2) 0, rgba(255,255,255,0.2) 2px, transparent 2px, transparent 4px);
+  animation: pulse-wave 1.6s linear infinite;
 }
 
-@keyframes pulseWave {
-  from {
-    transform: translateX(-40%);
-  }
-  to {
-    transform: translateX(110%);
-  }
-}
-
-.pulse-meter__gloss {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .25), transparent);
-  mix-blend-mode: screen;
-  opacity: .35;
+@keyframes pulse-wave {
+  from { background-position: 0 0; }
+  to { background-position: 100% 0; }
 }
 
 /* ===========================================================
@@ -512,9 +473,8 @@ body {
    =========================================================== */
 .modal-metallic {
   position: relative;
-  z-index: 100;
   background:
-    radial-gradient(circle at 50% 15%, rgba(255, 255, 255, .08), transparent 70%),
+    radial-gradient(circle at 50% 15%, rgba(255, 255, 255, .12), transparent 70%),
     linear-gradient(180deg, rgba(20, 10, 30, .88), rgba(8, 6, 12, .88));
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 18px;
@@ -593,19 +553,6 @@ body {
   border: 1px solid rgba(255, 0, 80, .35);
 }
 
-.btn--gemini {
-  background: linear-gradient(180deg, rgba(120, 120, 255, 0.2), rgba(0,0,0,0.4));
-  border: 1px solid rgba(150, 150, 255, 0.3);
-  color: #d0d0ff;
-  text-shadow: 0 0 8px rgba(120, 120, 255, 0.5);
-}
-
-.btn--gemini:hover {
-    background: linear-gradient(180deg, rgba(140, 140, 255, 0.3), rgba(20,20,40,0.4));
-    border-color: rgba(170, 170, 255, 0.4);
-}
-
-
 .btn--inline {
   color: var(--theme-highlight, #ffd700);
   border: 1px dashed currentColor;
@@ -679,19 +626,6 @@ body {
   opacity: 0;
 }
 
-/* ===========================================================
-   THEME: LAVENDER PROMISE (ROMANTIC ONE-TIME ROUND)
-   =========================================================== */
-.lavender-particle {
-  background: radial-gradient(circle, rgba(240,220,255,0.8), transparent 70%);
-  animation: floatLavender 12s ease-in-out infinite;
-}
-
-@keyframes floatLavender {
-  0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
-  50% { transform: translateY(-30px) scale(1.2); opacity: 0.7; }
-}
-
 /* --- SECRET ROUND VISUAL FIX --- */
 .secret-message .modal-metallic {
   box-shadow: 0 0 40px rgba(255, 150, 200, 0.55),
@@ -712,7 +646,7 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Interaction Hardening: disable text selection / long-press callouts on key controls --- */
+/* --- Interaction Hardening --- */
 .wheel-container,
 .wheel-canvas,
 .spin-button-wrapper,
