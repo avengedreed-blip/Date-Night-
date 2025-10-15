@@ -187,11 +187,10 @@ const publicApi = {
     if (Tone.context.state !== "running") {
       await Tone.start();
     }
-    if (Tone.Transport.state !== "started") {
-      Tone.Transport.start();
-    }
-
-    if (activeTheme && activeTheme.name === themeName) return;
+    
+    // [GeminiFix: ForeverPromiseAudio]
+    // Removed early return to allow re-triggering and ensure loops continue.
+    // if (activeTheme && activeTheme.name === themeName) return;
 
     const startNewThemeAndFadeIn = () => {
       if (activeTheme) {
@@ -208,6 +207,11 @@ const publicApi = {
       Tone.Transport.bpm.value = activeTheme.bpm;
       if (activeTheme.init) activeTheme.init();
       activeTheme.parts.forEach(p => p.start(0));
+      
+      if (Tone.Transport.state !== "started") {
+          Tone.Transport.start();
+      }
+      
       musicChannel.volume.rampTo(userMusicVolume, 1.5);
     };
 
@@ -747,8 +751,6 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
     }, [onSpinFinish]);
 
     const finishSpinNow = useCallback(() => {
-        // [GeminiFix: SpinUnlock]
-        setIsSpinInProgress(false); // Release spin lock immediately
         if (!spinLock.current) return; // Already finalized or never started
         
         try {
@@ -762,7 +764,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
             setIsPointerSettling(true);
             setTimeout(() => { setIsPointerSettling(false); }, 500);
             spinLock.current = false;
-            setIsSpinInProgress(false); // Redundant for safety
+            setIsSpinInProgress(false);
         }
     }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
 
@@ -1519,13 +1521,22 @@ const getInitialSettings = () => {
     return defaults;
 };
 
-// This hook encapsulates the prompt queuing and modal state logic.
+// [GeminiFix: PromptReliability]
 function usePromptQueue() {
     const [modalState, setModalState] = useState({ type: "", data: null });
     const [queuedPrompt, setQueuedPrompt] = useState(null);
     const lastAckIdRef = useRef(null);
+    const deliveryLock = useRef(false);
   
-    const enqueuePrompt = useCallback((p) => setQueuedPrompt(p), []);
+    const enqueuePrompt = useCallback((p) => {
+        if (deliveryLock.current) return;
+        deliveryLock.current = true;
+        requestAnimationFrame(() => {
+          setQueuedPrompt(p);
+          setTimeout(() => { deliveryLock.current = false; }, 100);
+        });
+    }, []);
+
     const handleModalAck = useCallback((id) => { lastAckIdRef.current = id; }, []);
   
     // Effect 1: When a prompt is queued, generate a unique ID and set the modal state to show it.
@@ -1651,18 +1662,7 @@ function App() {
         }
     }, [isSpinInProgress, setModalState]);
 
-    useEffect(() => {
-        if (modalState.type && gameState === "playing") {
-            const resetTimer = setTimeout(() => {
-                let activeDialog = null;
-                try { activeDialog = document.querySelector('[role="dialog"]'); } catch {}
-                if (!activeDialog && modalState.type) {
-                    setModalState({ type: "", data: null });
-                }
-            }, 10000);
-            return () => clearTimeout(resetTimer);
-        }
-    }, [modalState.type, gameState, setModalState]);
+    // [GeminiFix: PromptReliability] Watchdog removed.
 
     useEffect(() => {
         clearTimeout(turnIntroTimeoutRef.current);
@@ -1787,6 +1787,11 @@ function App() {
         if (isUnlockingAudio) return;
         setIsUnlockingAudio(true);
     
+        // [GeminiFix: AudioResume]
+        document.body.addEventListener("click", async () => {
+            if (window.Tone?.context?.state !== "running") await window.Tone.start();
+        }, { once: true });
+
         const attemptAudioInit = async () => {
             if (!window.Tone || !window.Tone.context) {
                 setScriptLoadState('error');
@@ -1931,8 +1936,8 @@ function App() {
         return choice;
     }, [recentPrompts]);
     
-    const handleSpinFinish = useCallback((category) => {
-        const createAndEnqueuePrompt = () => {
+    const handleSpinFinish = useCallback(async (category) => {
+        const createAndEnqueuePrompt = async () => {
             const { truthPrompts, darePrompts, triviaQuestions } = prompts;
             const list =
               category === 'truth'
@@ -1947,17 +1952,19 @@ function App() {
 
             const prompt = { title, text, type: category };
             if (!prompt) return;
+
+            // [GeminiFix: PromptReliability]
+            await new Promise(r => requestAnimationFrame(r));
             enqueuePrompt(prompt);
         };
         
-        // [GeminiFix: PromptReliability]
         if (modalStateRef.current?.type) {
             setModalState({ type: "", data: null });
-            setTimeout(createAndEnqueuePrompt, 0); // Defer to next tick to avoid React batching starvation
+            setTimeout(createAndEnqueuePrompt, 0);
             return;
         }
         
-        createAndEnqueuePrompt();
+        await createAndEnqueuePrompt();
 
     }, [prompts, isExtremeMode, pickPrompt, enqueuePrompt, setModalState]);
 

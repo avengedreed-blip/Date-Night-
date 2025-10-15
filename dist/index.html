@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <link rel="manifest" href="./assets/manifest-DRW-8Vu5.json" />
+    <link rel="manifest" href="/manifest.json">
 
     <!-- Preconnect + font -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -22,7 +22,16 @@
     />
 
     <title>Date Night</title>
-    <script type="module" crossorigin src="./assets/index-BJX2aYw4.js"></script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker registered'))
+        .catch(err => console.warn('Service Worker failed:', err));
+    });
+  }
+</script>
+
     <link rel="stylesheet" crossorigin href="./assets/index-38wYKbV_.css">
   </head>
   <body>
