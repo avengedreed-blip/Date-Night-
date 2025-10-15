@@ -1498,7 +1498,7 @@ const getInitialSettings = () => {
 
 // This hook encapsulates the prompt queuing and modal state logic.
 function usePromptQueue() {
-    const [modalState, setModalState] = useState({ type: null, data: null });
+    const [modalState, setModalState] = useState({ type: "", data: null });
     const [queuedPrompt, setQueuedPrompt] = useState(null);
     const lastAckIdRef = useRef(null);
   
@@ -1515,10 +1515,14 @@ function usePromptQueue() {
     // Effect 2: When the modal state updates, check if its ID matches the last acknowledged ID from a mounted modal.
     // If it matches, the prompt has been displayed, so we can clear the queue.
     useEffect(() => {
-      if (modalState?.data?._id && modalState.data._id === lastAckIdRef.current) {
+      if (
+        modalState?.type === "prompt" &&
+        modalState?.data?._id &&
+        modalState.data._id === lastAckIdRef.current
+      ) {
         setQueuedPrompt(null);
       }
-    }, [modalState?.data?._id]);
+    }, [modalState?.data?._id, modalState?.type]);
   
     return { modalState, setModalState, enqueuePrompt, handleModalAck };
 }
@@ -1608,7 +1612,7 @@ function App() {
     useEffect(() => {
         window.debugReset = () => {
             setIsSpinInProgress(false);
-            setModalState({ type: null, data: {} });
+            setModalState({ type: "", data: null });
             console.log('Force reset game modal/spin state');
         };
         const watchdog = setInterval(() => {
@@ -1633,7 +1637,7 @@ function App() {
                 try { activeDialog = document.querySelector('[role="dialog"]'); } catch {}
                 if (!activeDialog && modalState.type) {
                     console.warn("Failsafe: Resetting stale modal state.");
-                    setModalState({ type: null, data: {} });
+                    setModalState({ type: "", data: null });
                 }
             }, 10000);
             return () => clearTimeout(resetTimer);
@@ -1652,8 +1656,13 @@ function App() {
 
     const safeOpenModal = useCallback((type, data = {}) => {
         if (modalStateRef.current?.type) return;
-        if (type === 'secretPrompt') { try { secretPromptOpenAt.t = Date.now(); } catch {} }
-        setModalState({ type, data });
+        if (type === 'secretPrompt') { 
+            const id = crypto.randomUUID();
+            try { secretPromptOpenAt.t = Date.now(); } catch {} 
+            setModalState({ type, data: {...data, _id: id } });
+        } else {
+            setModalState({ type, data });
+        }
       }, [setModalState]);
 
     useEffect(() => { 
@@ -1685,13 +1694,14 @@ function App() {
     useEffect(() => {
         let t = currentTheme;
         if (isExtremeMode) t = 'crimsonFrenzy';
-        if (modalStateRef.current?.type === 'secretPrompt') t = 'lavenderPromise';
+        if (modalState.type === 'secretPrompt' || modalState.type === 'secretMessage') t = 'lavenderPromise';
+        
         if (t !== backgroundTheme) {
-            setPrevBackgroundClass?.(activeBackgroundClass);
-            setActiveBg?.(prev => (prev === 1 ? 2 : 1));
+            setPrevBackgroundClass(visualThemes[backgroundTheme]?.bg);
+            setActiveBg(prev => (prev === 1 ? 2 : 1));
             setBackgroundTheme(t);
         }
-    }, [currentTheme, isExtremeMode, backgroundTheme, activeBackgroundClass, modalState?.type]);
+    }, [currentTheme, isExtremeMode, modalState.type, backgroundTheme, visualThemes]);
     
     useEffect(() => {
         if (modalState.type === 'secretPrompt' && !themeNameBeforeSecretRef.current) {
@@ -1736,7 +1746,6 @@ function App() {
         setShowPowerSurge(true);
         audioEngine.playExtremePrompt();
         previousThemeRef.current = currentTheme;
-        //  // moved to intro close via handleThemeChange
         setShowConfetti(true);
         setExtremeRoundSource(source);
         safeOpenModal('extremeIntro');
@@ -1852,7 +1861,7 @@ function App() {
     
     const closeModal = useCallback(() => {
         audioEngine.playModalClose();
-        setModalState({ type: null, data: {} });
+        setModalState({ type: "", data: null });
     }, [setModalState]);
 
     const handlePromptModalClose = useCallback(() => {
@@ -1866,12 +1875,12 @@ function App() {
     }, [closeModal, endRoundAndStartNew]);
 
     const handleSecretLoveRoundClose = useCallback(() => {
-        setModalState({ type: null, data: {} });
+        setModalState({ type: "", data: null });
         endRoundAndStartNew();
     }, [setModalState, endRoundAndStartNew]);
 
     const handleExtremeIntroClose = useCallback(() => {
-        setModalState({ type: null, data: {} });
+        setModalState({ type: "", data: null });
         setIsExtremeMode(true);
         handleThemeChange('crimsonFrenzy');
         setGameState("extremeRound");
@@ -1910,7 +1919,7 @@ function App() {
 
     const handleRefuse = useCallback(() => { 
         audioEngine.playRefuse();
-        setModalState({type: null, data: {}});
+        setModalState({type: "", data: null});
         
         const list = isExtremeMode ? [...(prompts.consequences.extreme || [])] : [...(prompts.consequences.normal || []), ...(prompts.consequences.spicy || [])]; 
         const filteredList = list.filter(c => c && c.trim() !== ''); 
@@ -1927,7 +1936,7 @@ function App() {
             updatePrompts(updatedPrompts); 
         }
         if (modalState.data?.from === 'settings') {
-             setModalState({ type: 'settings', data: {} });
+             setModalState({ type: 'settings', data: null });
         } else {
              closeModal();
         }
@@ -1946,7 +1955,7 @@ function App() {
         setCurrentPlayer('p1');
         setIsExtremeMode(false);
         setSecretRoundUsed(false);
-        setModalState({ type: null, data: {} });
+        setModalState({ type: "", data: null });
         setGameState('onboarding_intro');
         setSecretSticky(false);
         setIsSecretThemeUnlocked(false);
@@ -2000,7 +2009,7 @@ function App() {
                             <h1 className={`text-6xl ${activeVisualTheme.titleText} font-['Great_Vibes']`} style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>
                                 Pulse
                             </h1>
-                            <motion.button onClick={() => { audioEngine.playUIConfirm(); setModalState({ type: "settings", data: {} }); }} className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg" whileTap={{ scale: 0.9, rotate: -15 }} whileHover={{ scale: 1.15, rotate: 15, boxShadow: "0 0 25px var(--theme-highlight)" }} aria-label="Settings">
+                            <motion.button onClick={() => { audioEngine.playUIConfirm(); setModalState({ type: "settings", data: null }); }} className="absolute top-6 right-4 text-[#FFD700] hover:text-yellow-300 bg-black/20 backdrop-blur-md border border-white/10 p-3 rounded-full shadow-lg" whileTap={{ scale: 0.9, rotate: -15 }} whileHover={{ scale: 1.15, rotate: 15, boxShadow: "0 0 25px var(--theme-highlight)" }} aria-label="Settings">
                                 <SettingsIcon />
                             </motion.button>
                         </header>
@@ -2081,6 +2090,7 @@ function App() {
                         handlePromptModalClose={handlePromptModalClose}
                         handleConsequenceClose={handleConsequenceClose}
                         handleRefuse={handleRefuse}
+                        setModalState={setModalState}
                         activeVisualTheme={activeVisualTheme}
                     />
                     {modalState.type === "extremeIntro" && (
@@ -2104,7 +2114,7 @@ function App() {
                         <SettingsModal
                         key="settings"
                         isOpen={true}
-                        onClose={() => setModalState({ type: null, data: {} })}
+                        onClose={() => setModalState({ type: "", data: null })}
                         settings={settings}
                         onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
                         isMuted={isMuted}
@@ -2124,10 +2134,10 @@ function App() {
                         <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
                     )}
                     {modalState.type === "confirmRestart" && (
-                        <ConfirmModal key="confirm-restart" isOpen={true} onClose={() => setModalState({ type: "settings", data: {} })} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />
+                        <ConfirmModal key="confirm-restart" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />
                     )}
                     {modalState.type === "confirmQuit" && (
-                        <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings", data: {} })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
+                        <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
                     )}
                 </AnimatePresence>
             </MotionConfig>
@@ -2136,7 +2146,7 @@ function App() {
 }
 
 // === MODAL MANAGER (Atomic Mount/Ack System) ===
-function ModalManager({ modalState, onMountAck, handlePromptModalClose, handleConsequenceClose, handleRefuse, activeVisualTheme }) {
+function ModalManager({ modalState, onMountAck, handlePromptModalClose, handleConsequenceClose, handleRefuse, setModalState, activeVisualTheme }) {
     if (!modalState?.type) return null;
   
     const { type, data } = modalState;
@@ -2157,11 +2167,15 @@ function ModalManager({ modalState, onMountAck, handlePromptModalClose, handleCo
         return <PromptModal key={key} isOpen={true} prompt={data} onClose={handlePromptModalClose} onRefuse={handleRefuse} activeVisualTheme={activeVisualTheme} />;
       case "consequence":
         return <ConsequenceModal key={key} isOpen={true} text={data.text} onClose={handleConsequenceClose} activeVisualTheme={activeVisualTheme} />;
-      // Note: SecretPromptModal is handled via safeOpenModal and transitions to SecretMessageModal,
-      // so it's not managed here to keep its unique flow intact.
+      case "secretPrompt":
+         const handleAccept = () => setModalState({ type: 'secretMessage', data: { outcome: data.prompt.outcomes.accept } });
+         const handleSecretRefuse = () => setModalState({ type: 'secretMessage', data: { outcome: data.prompt.outcomes.refuse } });
+        return <SecretPromptModal key={key} isOpen={true} prompt={data.prompt} onAccept={handleAccept} onRefuse={handleSecretRefuse} activeVisualTheme={activeVisualTheme} />;
       default:
         return null;
     }
 }
 
+
 export default App;
+

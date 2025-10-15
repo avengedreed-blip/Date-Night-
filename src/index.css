@@ -77,10 +77,11 @@ body {
     --meter-stop-3: #e6e6fa;
     --theme-label: #E6E6FA;
   }
-  /* === Lavender Promise (Secret Round Theme) === */.theme-lavender-promise {
-    --theme-base: #2d0a4e;            /* deep violet base */
-    --theme-highlight: #f6a2ff;       /* pink-violet accent */
-    --theme-label: #ffffff;           /* bright white labels */
+  /* === Lavender Promise (Secret Round Theme) === */
+  .theme-lavender-promise {
+    --theme-base: #2d0a4e;
+    --theme-highlight: #f6a2ff;
+    --theme-label: #ffffff;
     --theme-glow: rgba(248, 192, 255, 0.35);
     --theme-accent: #d47aff;
     --theme-pulse: #f8c8ff;
@@ -89,9 +90,9 @@ body {
   }
   /* === Forever Promise (High Contrast Visual Overhaul) === */
   .theme-forever-promise {
-    --theme-highlight: #f2aaff;     /* brighter rose-violet */
-    --theme-base: #4a1e5d;          /* deep plum base */
-    --theme-shadow: #2b134b;        /* darker vignette */
+    --theme-highlight: #f2aaff;
+    --theme-base: #4a1e5d;
+    --theme-shadow: #2b134b;
     --meter-stop-0: #8c42c6;
     --meter-stop-3: #d88bf2;
     --theme-label: #ffffff;
@@ -108,7 +109,6 @@ body {
   pointer-events: none;
   transition: opacity .8s ease;
   background: rgba(0, 0, 0, .9);
-  /* base so particles pop */
 }
 
 .theme-velour-nights-bg {
@@ -145,6 +145,7 @@ body {
 .theme-forever-promise .wheel-canvas {
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
 }
+
 
 /* Particles above bg, below overlays */
 .particle-canvas,
@@ -385,7 +386,6 @@ body {
       transparent 100%);
   transform: translateX(-120%);
   animation: spin-shimmer 3.5s linear infinite;
-  /* faster, premium feel */
   mix-blend-mode: overlay;
   opacity: .75;
 }
@@ -394,10 +394,7 @@ body {
   0% {
     transform: translateX(-120%);
   }
-  50% {
-    transform: translateX(120%);
-  }
-  100% {
+  50%, 100% {
     transform: translateX(120%);
   }
 }
@@ -728,3 +725,13 @@ header h1 {
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
+
+.theme-forever-promise .turn-banner {
+  color: #f8c8ff;
+  text-shadow: 0 0 10px rgba(250, 200, 255, 0.45);
+}
+.theme-forever-promise .btn--primary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.45));
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
