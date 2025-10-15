@@ -125,9 +125,9 @@ const audioEngine = (() => {
 
         const firstDanceReverb = new Tone.Reverb({ decay: 4, wet: 0.6 }).connect(musicChannel);
         const firstDanceDelay = new Tone.FeedbackDelay('8n.', 0.25).connect(firstDanceReverb);
-        const firstDancePad = new Tone.AMSynth({ volume: -16, envelope: { attack: 2, release: 2 } }).connect(new Tone.Filter(1200, 'lowpass').connect(firstDanceReverb));
-        const firstDancePiano = new Tone.PolySynth(Tone.Synth, { volume: -12, oscillator: { type: 'fmtriangle' }, envelope: { attack: 0.01, release: 1.5 } }).connect(firstDanceReverb);
-        const firstDanceLead = new Tone.FMSynth({ volume: -18, harmonicity: 2, modulationIndex: 5, envelope: { attack: 0.1, decay: 0.5 } }).connect(firstDanceDelay);
+        const firstDancePad = new Tone.AMSynth({ volume: -6, envelope: { attack: 2, release: 2 } }).connect(new Tone.Filter(1200, 'lowpass').connect(firstDanceReverb));
+        const firstDancePiano = new Tone.PolySynth(Tone.Synth, { volume: -2, oscillator: { type: 'fmtriangle' }, envelope: { attack: 0.01, release: 1.5 } }).connect(firstDanceReverb);
+        const firstDanceLead = new Tone.FMSynth({ volume: -8, harmonicity: 2, modulationIndex: 5, envelope: { attack: 0.1, decay: 0.5 } }).connect(firstDanceDelay);
 
         themes.firstDanceMix = {
             bpm: 72,
@@ -245,7 +245,12 @@ const publicApi = {
         playCorrect: () => { if (!isInitialized) return; synths.correct.triggerAttackRelease(['C5', 'E5', 'G5'], '8n', window.Tone.now()); },
         playWrong: () => { if (!isInitialized) return; const now = window.Tone.now(); synths.wrong.frequency.setValueAtTime('G4', now); synths.wrong.frequency.linearRampToValueAtTime('G3', now + 0.4); synths.wrong.triggerAttack(now); synths.wrong.triggerRelease(now + 0.4); },
         playExtremePrompt: () => { if (!isInitialized) return; const now = window.Tone.now(); synths.extremeSwell.triggerAttack(now); synths.extremeHit.triggerAttackRelease('C1', '1m', now + 1.4); },
-        playRefuse: () => { if (!isInitialized) return; const now = window.Tone.now(); synths.refuse.triggerAttack('C6', now); synths.refuse.triggerAttack('C4', now + 0.1); },
+        playRefuse: () => {
+  if (!isInitialized) return;
+  const now = window.Tone.now();
+  synths.refuse.triggerAttackRelease("C6", "8n", now);
+  synths.refuse.triggerAttackRelease("C4", "8n", now + 0.1);
+},
         playUIConfirm: () => { if (!isInitialized) return; synths.uiConfirm.triggerAttackRelease('C6', '16n'); }
     };
     return publicApi;
@@ -1623,11 +1628,42 @@ function App() {
       }, []);
 
     useEffect(() => {
-      if (queuedPrompt && !modalState.type) {
-        safeOpenModal("prompt", queuedPrompt);
-        setQueuedPrompt(null);
-      }
-    }, [queuedPrompt, modalState.type, safeOpenModal]);
+      if (!queuedPrompt) return;
+    
+      let cancelled = false;
+      const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+      const data = { ...queuedPrompt, _id: id };
+    
+      const tryOpen = (attempt = 0) => {
+        if (cancelled) return;
+    
+        const t = modalStateRef.current?.type;
+        const isBlocking = t && t !== "closing";
+        if (isBlocking) {
+          if (attempt < 10) {
+            setTimeout(() => tryOpen(attempt + 1), 150);
+          }
+          return;
+        }
+    
+        // Attempt open
+        setModalState({ type: "prompt", data });
+    
+        // Verify the modal actually mounted with our id; otherwise retry
+        setTimeout(() => {
+          const acked = modalStateRef.current?.data?._id === id;
+          if (acked && !cancelled) {
+            setQueuedPrompt(null);
+          } else if (attempt < 10) {
+            setTimeout(() => tryOpen(attempt + 1), 150);
+          }
+        }, 50);
+      };
+    
+      tryOpen();
+    
+      return () => { cancelled = true; };
+    }, [queuedPrompt, setQueuedPrompt, setModalState]);
 
     useEffect(() => { 
         if (window.Tone) { 
