@@ -1,12 +1,32 @@
 /* --- PROMPT RELIABILITY FIX --- */
 /* --- SECRET ROUND TIMING PATCH --- */
 /* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 
 // Ensure Tone.js is globally available
 import * as Tone from "tone";
 if (!window.Tone) window.Tone = Tone;
+
+// RELIABILITY: Centralized gesture-based audio resume helper.
+const resumeAudioOnGesture = async () => {
+  if (!window.Tone || !window.Tone.context) return;
+  if (window.Tone.context.state === "running") return;
+  try {
+    await window.Tone.start();
+  } catch (err) {
+    console.warn("Tone.js resume failed", err);
+  }
+};
+
+// RELIABILITY: Microtask scheduler to avoid rAF timing drift.
+const scheduleMicrotask = (fn) => {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+    return;
+  }
+  Promise.resolve().then(fn);
+};
 
 // [GeminiFix: ManifestHardening]
 // Non-critical asset error suppression
@@ -156,8 +176,8 @@ const audioEngine = (() => {
 const publicApi = {
   async initialize() {
     if (isInitialized || !window.Tone) return false;
-    try { 
-      if (window.Tone.context.state !== 'running') await window.Tone.start();
+    try {
+      await resumeAudioOnGesture();
 
       const ctx = window.Tone.getContext();
       if (ctx.rawContext) {
@@ -184,9 +204,7 @@ const publicApi = {
     const Tone = window.Tone;
     if (!isInitialized || !Tone || !themes[themeName]) return;
 
-    if (Tone.context.state !== "running") {
-      await Tone.start();
-    }
+    await resumeAudioOnGesture();
     
     // [GeminiFix: ForeverPromiseAudio]
     // Removed early return to allow re-triggering and ensure loops continue.
@@ -730,7 +748,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked, isSpinInProgress, modalStateRef}) => {
+const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked, isSpinInProgress, modalStateRef}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -741,25 +759,26 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
 
-    const finalizeSpin = useCallback(() => {
+    const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
         const sliceAngle = 360 / CATEGORIES.length;
         const normalizedAngle = (-rotation + 90 + 360) % 360;
-        const sliceIndex = Math.floor(normalizedAngle / sliceAngle) % CATEGORIES.length;
+        const EPSILON = 0.0001;
+        const sliceIndex = Math.round((normalizedAngle + EPSILON) / sliceAngle) % CATEGORIES.length;
         const winner = CATEGORIES[sliceIndex].toLowerCase();
-        onSpinFinish(winner);
+        onSpinFinish(winner, { source: reason });
     }, [onSpinFinish]);
 
-    const finishSpinNow = useCallback(() => {
+    const finishSpinNow = useCallback((reason = 'complete') => {
         if (!spinLock.current) return; // Already finalized or never started
-        
+
         try {
             playWheelStop();
-            finalizeSpin();
+            finalizeSpin(reason);
         } finally {
             if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
             if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
-            
+
             setIsSpinning(false);
             setIsPointerSettling(true);
             setTimeout(() => { setIsPointerSettling(false); }, 500);
@@ -768,16 +787,25 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
         }
     }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
 
-    // [GeminiFix: BackgroundFailsafe]
+    // RELIABILITY: Force finalize when visibility changes or page hides mid-spin.
     useEffect(() => {
         const handleVisibility = () => {
-          if (!document.hidden && isSpinInProgress && !modalStateRef.current?.type) {
-            finishSpinNow();
-          }
+            if (document.hidden && spinLock.current) {
+                finishSpinNow('visibility');
+            }
         };
-        document.addEventListener("visibilitychange", handleVisibility);
-        return () => document.removeEventListener("visibilitychange", handleVisibility);
-    }, [isSpinInProgress, modalStateRef, finishSpinNow]);
+        const handlePageHide = () => {
+            if (spinLock.current) {
+                finishSpinNow('pagehide');
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('pagehide', handlePageHide);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('pagehide', handlePageHide);
+        };
+    }, [finishSpinNow]);
 
     useEffect(() => () => {
         if (animationFrameRef.current) {
@@ -992,6 +1020,9 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
         
         setIsSpinning(true);
         setIsSpinInProgress(true);
+        if (onSpinStart) {
+            onSpinStart({ source: 'wheel' });
+        }
         playWheelSpinStart();
 
         failsafeRef.current = setTimeout(() => {
@@ -1000,9 +1031,9 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                 animationFrameRef.current = null;
             }
             console.warn('Failsafe spin timer triggered. Finalizing spin now.');
-            rotationRef.current += (Math.random() * 180 - 90); 
+            rotationRef.current += (Math.random() * 180 - 90);
             if(wheelCanvasRef.current) wheelCanvasRef.current.style.transform = `rotate(${rotationRef.current}deg)`;
-            finishSpinNow();
+            finishSpinNow('failsafe');
         }, 7000);
 
         if (reducedMotion) {
@@ -1021,7 +1052,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
 
             setTimeout(() => {
                 if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
-                finishSpinNow();
+                finishSpinNow('reducedMotion');
             }, 500);
             return;
         }
@@ -1063,11 +1094,11 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
                 if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
                 animationFrameRef.current = null;
                 rotationRef.current = targetAngle;
-                finishSpinNow();
+                finishSpinNow('complete');
             }
         };
         animationFrameRef.current = requestAnimationFrame(animate);
-    }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress]);
+    }, [canSpin, reducedMotion, playWheelSpinStart, playWheelTick, finishSpinNow, setIsSpinInProgress, onSpinStart]);
 
 
     return (
@@ -1123,6 +1154,7 @@ const Wheel = React.memo(({onSpinFinish, playWheelSpinStart, playWheelTick, play
     if (secretPressTimerRef.current) {
       clearTimeout(secretPressTimerRef.current);
       secretPressTimerRef.current = null;
+      handleSpin();
     }
   }}
 >
@@ -1521,44 +1553,78 @@ const getInitialSettings = () => {
     return defaults;
 };
 
-// [GeminiFix: PromptReliability]
+const PROMPT_QUEUE_INITIAL_STATE = {
+    queue: [],
+    active: null,
+    deliveryLock: false,
+    lastDeliveryPath: 'init',
+    enqueueWhileLocked: 0,
+    watchdogFires: 0,
+};
+
+const promptQueueReducer = (state, action) => {
+    switch (action.type) {
+        case 'ENQUEUE': {
+            const source = action.meta?.source || action.payload?.source || 'wheel';
+            const payload = { ...action.payload, source };
+            const nextQueue = [...state.queue, payload];
+            const locked = state.deliveryLock || !!state.active;
+            const enqueueWhileLocked = locked ? state.enqueueWhileLocked + 1 : state.enqueueWhileLocked;
+            const watchdogFires = source === 'watchdog' ? state.watchdogFires + 1 : state.watchdogFires;
+            return { ...state, queue: nextQueue, enqueueWhileLocked, watchdogFires };
+        }
+        case 'LOCK': {
+            if (state.deliveryLock) return state;
+            return { ...state, deliveryLock: true };
+        }
+        case 'DEQUEUE': {
+            if (!state.queue.length) {
+                return { ...state, active: null };
+            }
+            const [next, ...rest] = state.queue;
+            const source = next?.source || action.meta?.source || state.lastDeliveryPath;
+            return { ...state, queue: rest, active: next, lastDeliveryPath: source };
+        }
+        case 'UNLOCK': {
+            return { ...state, deliveryLock: false, active: null };
+        }
+        case 'RESET': {
+            return {
+                ...PROMPT_QUEUE_INITIAL_STATE,
+                lastDeliveryPath: state.lastDeliveryPath,
+                watchdogFires: state.watchdogFires,
+            };
+        }
+        default:
+            return state;
+    }
+};
+
+// RELIABILITY: Prompt queue reducer ensures deterministic delivery order.
 function usePromptQueue() {
     const [modalState, setModalState] = useState({ type: "", data: null });
-    const [queuedPrompt, setQueuedPrompt] = useState(null);
-    const lastAckIdRef = useRef(null);
-    const deliveryLock = useRef(false);
-  
-    const enqueuePrompt = useCallback((p) => {
-        if (deliveryLock.current) return;
-        deliveryLock.current = true;
-        requestAnimationFrame(() => {
-          setQueuedPrompt(p);
-          setTimeout(() => { deliveryLock.current = false; }, 100);
-        });
+    const [queueState, dispatchQueue] = useReducer(promptQueueReducer, PROMPT_QUEUE_INITIAL_STATE);
+
+    const enqueuePrompt = useCallback((payload, meta = {}) => {
+        dispatchQueue({ type: 'ENQUEUE', payload, meta });
     }, []);
 
-    const handleModalAck = useCallback((id) => { lastAckIdRef.current = id; }, []);
-  
-    // Effect 1: When a prompt is queued, generate a unique ID and set the modal state to show it.
     useEffect(() => {
-      if (!queuedPrompt) return;
-      const id = crypto.randomUUID();
-      setModalState({ type: "prompt", data: { ...queuedPrompt, _id: id } });
-    }, [queuedPrompt]);
-  
-    // Effect 2: When the modal state updates, check if its ID matches the last acknowledged ID from a mounted modal.
-    // If it matches, the prompt has been displayed, so we can clear the queue.
+        if (queueState.active || !queueState.queue.length || queueState.deliveryLock) return;
+        if (modalState?.type) return;
+        dispatchQueue({ type: 'LOCK' });
+        scheduleMicrotask(() => dispatchQueue({ type: 'DEQUEUE' }));
+    }, [queueState.active, queueState.queue.length, queueState.deliveryLock, modalState?.type]);
+
     useEffect(() => {
-      if (
-        modalState?.type === "prompt" &&
-        modalState?.data?._id &&
-        modalState.data._id === lastAckIdRef.current
-      ) {
-        setQueuedPrompt(null);
-      }
-    }, [modalState?.data?._id, modalState?.type]);
-  
-    return { modalState, setModalState, enqueuePrompt, handleModalAck };
+        if (!queueState.active) return;
+        const id = crypto.randomUUID();
+        setModalState({ type: 'prompt', data: { ...queueState.active, _id: id } });
+    }, [queueState.active]);
+
+    const resetQueue = useCallback(() => dispatchQueue({ type: 'RESET' }), []);
+
+    return { modalState, setModalState, enqueuePrompt, queueState, dispatchQueue, resetQueue };
 }
 
 function App() {
@@ -1567,12 +1633,17 @@ function App() {
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     
     // Use the new prompt queue hook
-    const { modalState, setModalState, enqueuePrompt, handleModalAck } = usePromptQueue();
+    const { modalState, setModalState, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
     const modalStateRef = useRef(modalState); // Keep ref for legacy dependencies if any
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         modalStateRef.current = modalState;
     }, [modalState]);
+
+    const promptQueueStateRef = useRef(queueState);
+    useLayoutEffect(() => {
+        promptQueueStateRef.current = queueState;
+    }, [queueState]);
     
     const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
@@ -1605,13 +1676,13 @@ function App() {
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
     const themeNameBeforeSecretRef = useRef(null);
+    const pendingPromptRef = useRef(null);
+    const spinWatchdogRef = useRef(null);
 
     // AudioContext autoplay warning fix
     useEffect(() => {
         const resumeAudioContext = () => {
-            if (Tone?.context?.state !== "running") {
-                Tone.context.resume();
-            }
+            resumeAudioOnGesture();
         };
         document.addEventListener('click', resumeAudioContext, { once: true });
 
@@ -1689,16 +1760,13 @@ function App() {
     }, [gameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
-        if (modalStateRef.current?.type) {
-            setModalState({ type: "", data: null });
-        }
-        if (type === 'secretPrompt') { 
+        if (type === 'secretPrompt') {
             const id = crypto.randomUUID();
-            try { secretPromptOpenAt.t = Date.now(); } catch {} 
-            setModalState({ type, data: {...data, _id: id } });
-        } else {
-            setModalState({ type, data });
+            try { secretPromptOpenAt.t = Date.now(); } catch {}
+            setModalState({ type, data: { ...data, _id: id } });
+            return;
         }
+        setModalState({ type, data });
       }, [setModalState]);
 
     useEffect(() => { 
@@ -1717,10 +1785,11 @@ function App() {
         return () => { if (script.parentNode) script.parentNode.removeChild(script); };
     }, []);
 
-    useEffect(() => { 
-        if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) { 
-            audioEngine.playModalOpen(); 
-        } 
+    useEffect(() => {
+        if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
+            resumeAudioOnGesture();
+            audioEngine.playModalOpen();
+        }
     }, [modalState.type]);
     
     useEffect(() => { const convertToDb = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40); audioEngine.setMasterVolume(convertToDb(settings.masterVolume)); audioEngine.setMusicVolume(convertToDb(settings.musicVolume)); audioEngine.setSfxVolume(convertToDb(settings.sfxVolume)); }, [settings]);
@@ -1806,15 +1875,12 @@ function App() {
                 setScriptLoadState('error');
                 return false;
             }
-            if (window.Tone?.context?.state !== "running") {
-                try {
-                  await window.Tone.start();
-                } catch (e) {
-                  console.error("Audio unlock failed:", e);
-                  return false;
-                }
+            try {
+                await resumeAudioOnGesture();
+            } catch (e) {
+                console.error("Audio unlock failed:", e);
+                return false;
             }
-            await window.Tone.context.resume();
             const success = await audioEngine.initialize();
             if (success) {
                 await audioEngine.startTheme("velourNights");
@@ -1913,13 +1979,17 @@ function App() {
 
     const handlePromptModalClose = useCallback(() => {
         closeModal();
+        dispatchQueue({ type: 'UNLOCK' });
+        pendingPromptRef.current = null;
         endRoundAndStartNew();
-    }, [closeModal, endRoundAndStartNew]);
+    }, [closeModal, endRoundAndStartNew, dispatchQueue]);
 
     const handleConsequenceClose = useCallback(() => {
         closeModal();
+        dispatchQueue({ type: 'UNLOCK' });
+        pendingPromptRef.current = null;
         endRoundAndStartNew();
-    }, [closeModal, endRoundAndStartNew]);
+    }, [closeModal, endRoundAndStartNew, dispatchQueue]);
 
     const handleSecretLoveRoundClose = useCallback(() => {
         setModalState({ type: "", data: null });
@@ -1945,49 +2015,72 @@ function App() {
         return choice;
     }, [recentPrompts]);
     
-    const handleSpinFinish = useCallback(async (category) => {
-        const createAndEnqueuePrompt = async () => {
-            const { truthPrompts, darePrompts, triviaQuestions } = prompts;
-            const list =
-              category === 'truth'
+    const handleSpinStart = useCallback((meta = { source: 'wheel' }) => {
+        if (spinWatchdogRef.current) {
+            clearTimeout(spinWatchdogRef.current);
+        }
+        pendingPromptRef.current = null;
+        spinWatchdogRef.current = setTimeout(() => {
+            const queueSnapshot = promptQueueStateRef.current;
+            const activeModalType = modalStateRef.current?.type;
+            if (activeModalType === 'prompt') return;
+            if (queueSnapshot.active || queueSnapshot.queue.length || queueSnapshot.deliveryLock) return;
+            if (pendingPromptRef.current) {
+                enqueuePrompt(pendingPromptRef.current, { source: 'watchdog' });
+                pendingPromptRef.current = null;
+            }
+        }, 6000);
+    }, [enqueuePrompt]);
+
+    const handleSpinFinish = useCallback((category, meta = { source: 'wheel' }) => {
+        const { truthPrompts, darePrompts, triviaQuestions } = prompts;
+        const source = meta?.source || 'wheel';
+        const list =
+            category === 'truth'
                 ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy])
                 : category === 'dare'
                 ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
                 : [...triviaQuestions.normal];
 
-            const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
-            const text = pickPrompt(category, validList);
-            const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
+        const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
+        const text = pickPrompt(category, validList);
+        const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
 
-            const prompt = { title, text, type: category };
-            if (!prompt) return;
+        if (!text) return;
 
-            // [GeminiFix: PromptReliability]
-            await new Promise(r => requestAnimationFrame(r));
-            enqueuePrompt(prompt);
-        };
-        
-        if (modalStateRef.current?.type) {
-            setModalState({ type: "", data: null });
-            setTimeout(createAndEnqueuePrompt, 0);
-            return;
+        const prompt = { title, text, type: category, source };
+        pendingPromptRef.current = prompt;
+        enqueuePrompt(prompt, { source });
+    }, [prompts, isExtremeMode, pickPrompt, enqueuePrompt]);
+
+    useEffect(() => {
+        if (queueState.active || modalState.type === 'prompt') {
+            if (spinWatchdogRef.current) {
+                clearTimeout(spinWatchdogRef.current);
+                spinWatchdogRef.current = null;
+            }
         }
-        
-        await createAndEnqueuePrompt();
+    }, [queueState.active, modalState.type]);
 
-    }, [prompts, isExtremeMode, pickPrompt, enqueuePrompt, setModalState]);
+    useEffect(() => () => {
+        if (spinWatchdogRef.current) {
+            clearTimeout(spinWatchdogRef.current);
+            spinWatchdogRef.current = null;
+        }
+    }, []);
 
-    const handleRefuse = useCallback(() => { 
+    const handleRefuse = useCallback(() => {
         audioEngine.playRefuse();
         setModalState({type: "", data: null});
-        
-        const list = isExtremeMode ? [...(prompts.consequences.extreme || [])] : [...(prompts.consequences.normal || []), ...(prompts.consequences.spicy || [])]; 
-        const filteredList = list.filter(c => c && c.trim() !== ''); 
-        const text = filteredList.length > 0 ? filteredList[Math.floor(Math.random() * filteredList.length)] : "Add consequences in the editor!"; 
-        
+
+        const list = isExtremeMode ? [...(prompts.consequences.extreme || [])] : [...(prompts.consequences.normal || []), ...(prompts.consequences.spicy || [])];
+        const filteredList = list.filter(c => c && c.trim() !== '');
+        const text = filteredList.length > 0 ? filteredList[Math.floor(Math.random() * filteredList.length)] : "Add consequences in the editor!";
+
         setTimeout(() => {
             safeOpenModal('consequence', { text });
         }, 50);
+        pendingPromptRef.current = null;
     }, [isExtremeMode, prompts, safeOpenModal, setModalState]);
 
     const handleEditorClose = useCallback((updatedPrompts) => { 
@@ -2015,11 +2108,17 @@ function App() {
         setCurrentPlayer('p1');
         setIsExtremeMode(false);
         setSecretRoundUsed(false);
+        resetQueue();
+        pendingPromptRef.current = null;
+        if (spinWatchdogRef.current) {
+            clearTimeout(spinWatchdogRef.current);
+            spinWatchdogRef.current = null;
+        }
         setModalState({ type: "", data: null });
         setGameState('onboarding_intro');
         setSecretSticky(false);
         setIsSecretThemeUnlocked(false);
-    }, [setModalState]);
+    }, [setModalState, resetQueue]);
 
     const handleQuitGame = useCallback(() => {
         handleRestartGame();
@@ -2075,11 +2174,12 @@ function App() {
                         </header>
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
-                                <Wheel 
-                                    onSpinFinish={handleSpinFinish} 
-                                    playWheelSpinStart={audioEngine.playWheelSpinStart} 
-                                    playWheelTick={audioEngine.playWheelTick} 
-                                    playWheelStop={audioEngine.playWheelStopSound} 
+                                <Wheel
+                                    onSpinFinish={handleSpinFinish}
+                                    onSpinStart={handleSpinStart}
+                                    playWheelSpinStart={audioEngine.playWheelSpinStart}
+                                    playWheelTick={audioEngine.playWheelTick}
+                                    playWheelStop={audioEngine.playWheelStopSound}
                                     setIsSpinInProgress={setIsSpinInProgress} 
                                     currentTheme={currentTheme} 
                                     canSpin={canSpin} 
@@ -2162,7 +2262,6 @@ function App() {
                 <AnimatePresence initial={false}>
                     <ModalManager
                         modalState={modalState}
-                        onMountAck={handleModalAck}
                         handlePromptModalClose={handlePromptModalClose}
                         handleConsequenceClose={handleConsequenceClose}
                         handleRefuse={handleRefuse}
@@ -2222,24 +2321,17 @@ function App() {
 }
 
 // === MODAL MANAGER (Atomic Mount/Ack System) ===
-function ModalManager({ modalState, onMountAck, handlePromptModalClose, handleConsequenceClose, handleRefuse, setModalState, activeVisualTheme }) {
+function ModalManager({ modalState, handlePromptModalClose, handleConsequenceClose, handleRefuse, setModalState, activeVisualTheme }) {
     if (!modalState?.type) return null;
-  
+
     const { type, data } = modalState;
     // Only manage the core gameplay modals here. Others are handled directly in App.
     if (type !== 'prompt' && type !== 'consequence' && type !== 'secretPrompt') {
       return null;
     }
-  
+
     const key = data?._id || crypto.randomUUID();
-  
-    // [GeminiFix: ModalAck]
-    // This effect "acknowledges" that the modal has mounted, triggering the queue to clear.
-    useEffect(() => {
-        const id = data?._id || key;
-        onMountAck?.(id);
-    }, []); // Fire once on mount
-  
+
     switch (type) {
       case "prompt":
         return <PromptModal key={key} isOpen={true} prompt={data} onClose={handlePromptModalClose} onRefuse={handleRefuse} activeVisualTheme={activeVisualTheme} />;
