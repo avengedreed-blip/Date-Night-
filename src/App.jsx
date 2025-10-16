@@ -68,6 +68,11 @@ window.addEventListener("error", (e) => {
   }
 }, true);
 
+// RELIABILITY: lightweight diagnostics logger
+window.addEventListener('error', (e) => {
+  localStorage.setItem('lastError', e.message);
+});
+
 
 // Registry to suppress click immediately after a secret round opens
 const secretPromptOpenAt = { t: 0 };
