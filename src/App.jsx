@@ -19,6 +19,15 @@ const resumeAudioOnGesture = async () => {
   }
 };
 
+// RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
+const safeUUID = () => {
+  const api = globalThis.crypto;
+  if (api && typeof api.randomUUID === 'function') {
+      return api.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 // RELIABILITY: Microtask scheduler to avoid rAF timing drift.
 const scheduleMicrotask = (fn) => {
   if (typeof queueMicrotask === "function") {
@@ -328,24 +337,64 @@ const secretRoundPrompts = [
     },
 ];
 
+const cloneDefaultPrompts = () => structuredClone(defaultPrompts);
+
+const hasArrayBuckets = (bucket, keys) => {
+    if (!bucket || typeof bucket !== 'object') return false;
+    return keys.every((key) => Array.isArray(bucket[key]));
+};
+
+// RELIABILITY: Normalize stored prompt payloads to avoid malformed queue crashes.
+const normalizeStoredPrompts = (value) => {
+    const defaults = cloneDefaultPrompts();
+    if (!value || typeof value !== 'object') {
+        return defaults;
+    }
+    try {
+        const truthValid = hasArrayBuckets(value.truthPrompts, ['normal', 'spicy', 'extreme']);
+        const dareValid = hasArrayBuckets(value.darePrompts, ['normal', 'spicy', 'extreme']);
+        const triviaValid = hasArrayBuckets(value.triviaQuestions, ['normal']);
+        const consequenceValid = hasArrayBuckets(value.consequences, ['normal', 'spicy', 'extreme']);
+
+        if (!(truthValid && dareValid && triviaValid && consequenceValid)) {
+            return defaults;
+        }
+
+        return {
+            ...defaults,
+            ...value,
+            truthPrompts: { ...defaults.truthPrompts, ...value.truthPrompts },
+            darePrompts: { ...defaults.darePrompts, ...value.darePrompts },
+            triviaQuestions: { ...defaults.triviaQuestions, ...value.triviaQuestions },
+            consequences: { ...defaults.consequences, ...value.consequences },
+        };
+    } catch (err) {
+        console.warn('[Reliability] Failed to normalize stored prompts, using defaults instead.', err);
+        return defaults;
+    }
+};
+
 const useLocalStoragePrompts = () => {
   const [prompts, setPrompts] = useState(() => {
     try {
       const stored = localStorage.getItem("prompts");
-      return stored ? JSON.parse(stored) : defaultPrompts;
+      if (!stored) return cloneDefaultPrompts();
+      return normalizeStoredPrompts(JSON.parse(stored));
     } catch {
-      return defaultPrompts;
+      return cloneDefaultPrompts();
     }
   });
 
   const updatePrompts = (newPrompts) => {
-    setPrompts(newPrompts);
-    localStorage.setItem("prompts", JSON.stringify(newPrompts));
+    const normalized = normalizeStoredPrompts(newPrompts);
+    setPrompts(normalized);
+    localStorage.setItem("prompts", JSON.stringify(normalized));
   };
 
   const resetPrompts = () => {
-    setPrompts(defaultPrompts);
-    localStorage.setItem("prompts", JSON.stringify(defaultPrompts));
+    const defaults = cloneDefaultPrompts();
+    setPrompts(defaults);
+    localStorage.setItem("prompts", JSON.stringify(defaults));
   };
 
   return {
@@ -748,7 +797,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked, isSpinInProgress, modalStateRef}) => {
+const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked, isSpinInProgress, modalStateRef, registerWatchdogControl}) => {
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -758,6 +807,16 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
+
+    useEffect(() => {
+        if (!registerWatchdogControl) return;
+        // RELIABILITY: Surface finalize hook so watchdog routes through finishSpinNow.
+        registerWatchdogControl({
+            finish: (reason = 'watchdog') => finishSpinNow(reason),
+            isLocked: () => !!spinLock.current,
+        });
+        return () => registerWatchdogControl(null);
+    }, [registerWatchdogControl, finishSpinNow]);
 
     const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
@@ -1023,6 +1082,11 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         }
         lastSpinTimeRef.current = now;
         spinLock.current = true; // Acquire lock
+
+        if (window?.Tone?.context?.state === 'suspended') {
+            // RELIABILITY: Resume audio on direct spin gesture after background suspension.
+            resumeAudioOnGesture();
+        }
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
         
@@ -1631,7 +1695,7 @@ function usePromptQueue() {
 
     useEffect(() => {
         if (!queueState.active) return;
-        const id = crypto.randomUUID();
+        const id = safeUUID();
         setModalState({ type: 'prompt', data: { ...queueState.active, _id: id } });
     }, [queueState.active]);
 
@@ -1652,6 +1716,29 @@ function App() {
     useLayoutEffect(() => {
         modalStateRef.current = modalState;
     }, [modalState]);
+
+    useLayoutEffect(() => {
+        if (!modalState?.type) return;
+        const activeEl = document.activeElement;
+        if (activeEl && typeof activeEl.blur === 'function') {
+            // RELIABILITY: Blur focused controls before aria-hidden background.
+            activeEl.blur();
+        }
+    }, [modalState?.type]);
+
+    useEffect(() => {
+        const container = document.getElementById('app-content');
+        if (!container) return;
+        if (modalState.type) {
+            // RELIABILITY: Inert background while modal is active to prevent focus conflicts.
+            container.setAttribute('inert', '');
+        } else {
+            container.removeAttribute('inert');
+        }
+        return () => {
+            container.removeAttribute('inert');
+        };
+    }, [modalState.type]);
 
     const promptQueueStateRef = useRef(queueState);
     useLayoutEffect(() => {
@@ -1697,10 +1784,26 @@ function App() {
         const resumeAudioContext = () => {
             resumeAudioOnGesture();
         };
-        document.addEventListener('click', resumeAudioContext, { once: true });
+        const attachUnlockListener = () => {
+            document.removeEventListener('click', resumeAudioContext);
+            document.addEventListener('click', resumeAudioContext, { once: true });
+        };
+
+        attachUnlockListener();
+
+        const handleVisibility = () => {
+            if (document.hidden) return;
+            if (window?.Tone?.context?.state === 'suspended') {
+                // RELIABILITY: Re-arm gesture listener after background resume.
+                attachUnlockListener();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
             document.removeEventListener('click', resumeAudioContext);
+            document.removeEventListener('visibilitychange', handleVisibility);
         };
     }, []);
     
@@ -1741,24 +1844,50 @@ function App() {
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
 
+    const wheelControlRef = useRef(null);
+    const registerWheelControl = useCallback((api) => {
+        wheelControlRef.current = api;
+    }, []);
+
+    const resolveStalledSpin = useCallback((reason = 'watchdog') => {
+        const queueSnapshot = promptQueueStateRef.current;
+        const activeModalType = modalStateRef.current?.type;
+        if (activeModalType === 'prompt') return false;
+        if (queueSnapshot.active || queueSnapshot.queue.length || queueSnapshot.deliveryLock) return false;
+
+        const wheelApi = wheelControlRef.current;
+        if (wheelApi && typeof wheelApi.isLocked === 'function' && wheelApi.isLocked()) {
+            wheelApi.finish(reason);
+            return true;
+        }
+
+        if (pendingPromptRef.current) {
+            enqueuePrompt(pendingPromptRef.current, { source: reason });
+            pendingPromptRef.current = null;
+            return true;
+        }
+
+        return false;
+    }, [enqueuePrompt]);
+
     useEffect(() => {
-        window.debugReset = () => {
-            setIsSpinInProgress(false);
-            setModalState({ type: "", data: null });
-        };
-        const watchdog = setInterval(() => {
-            if (window.debugReset && isSpinInProgress && !document.querySelector('.spin-button:disabled')) {
-                 const isSpinningVisually = (!!document.querySelector('.spin-button svg.animate-spin'));
-                 if(!isSpinningVisually) {
-                    window.debugReset();
-                 }
-            }
-        }, 2000);
+        window.debugReset = () => resolveStalledSpin('manual');
+        let watchdog;
+        if (isSpinInProgress) {
+            watchdog = setInterval(() => {
+                const wheelApi = wheelControlRef.current;
+                if (!wheelApi || typeof wheelApi.isLocked !== 'function' || !wheelApi.isLocked()) return;
+                if (document.querySelector('.spin-button:disabled')) return;
+                const isSpinningVisually = !!document.querySelector('.spin-button svg.animate-spin');
+                if (isSpinningVisually) return;
+                resolveStalledSpin('watchdog');
+            }, 2000);
+        }
         return () => {
             delete window.debugReset;
-            clearInterval(watchdog);
-        }
-    }, [isSpinInProgress, setModalState]);
+            if (watchdog) clearInterval(watchdog);
+        };
+    }, [isSpinInProgress, resolveStalledSpin]);
 
     // [GeminiFix: PromptReliability] Watchdog removed.
 
@@ -1774,7 +1903,7 @@ function App() {
 
     const safeOpenModal = useCallback((type, data = {}) => {
         if (type === 'secretPrompt') {
-            const id = crypto.randomUUID();
+            const id = safeUUID();
             try { secretPromptOpenAt.t = Date.now(); } catch {}
             setModalState({ type, data: { ...data, _id: id } });
             return;
@@ -2210,12 +2339,13 @@ function App() {
                                     canSpin={canSpin} 
                                     reducedMotion={prefersReducedMotion} 
                                     safeOpenModal={safeOpenModal} 
-                                    handleThemeChange={handleThemeChange} 
-                                    setGameState={setGameState} 
-                                    setSecretSticky={setSecretSticky} 
-                                    setIsSecretThemeUnlocked={setIsSecretThemeUnlocked} 
+                                    handleThemeChange={handleThemeChange}
+                                    setGameState={setGameState}
+                                    setSecretSticky={setSecretSticky}
+                                    setIsSecretThemeUnlocked={setIsSecretThemeUnlocked}
                                     isSpinInProgress={isSpinInProgress}
                                     modalStateRef={modalStateRef}
+                                    registerWatchdogControl={registerWheelControl}
                                 />
                             }
                             <div className="relative mt-8">
@@ -2355,7 +2485,7 @@ function ModalManager({ modalState, handlePromptModalClose, handleConsequenceClo
       return null;
     }
 
-    const key = data?._id || crypto.randomUUID();
+    const key = data?._id || safeUUID();
 
     switch (type) {
       case "prompt":
