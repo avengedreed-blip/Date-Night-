@@ -765,7 +765,15 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         const normalizedAngle = (-rotation + 90 + 360) % 360;
         const EPSILON = 0.0001;
         const sliceIndex = Math.round((normalizedAngle + EPSILON) / sliceAngle) % CATEGORIES.length;
-        const winner = CATEGORIES[sliceIndex].toLowerCase();
+        // RELIABILITY: capture raw winner before normalization
+        const rawWinner = CATEGORIES[sliceIndex];
+        // RELIABILITY: guard undefined winner/payload to prevent .toLowerCase() crash
+        if (typeof rawWinner !== 'string' || !rawWinner) {
+            console.warn("[Reliability] Invalid winner payload:", rawWinner);
+            return;
+        }
+        // RELIABILITY: safe normalization of winner label
+        const winner = rawWinner.toLowerCase();
         onSpinFinish(winner, { source: reason });
     }, [onSpinFinish]);
 
@@ -1565,6 +1573,11 @@ const PROMPT_QUEUE_INITIAL_STATE = {
 const promptQueueReducer = (state, action) => {
     switch (action.type) {
         case 'ENQUEUE': {
+            // RELIABILITY: validate payload structure
+            if (!action.payload || typeof action.payload !== 'object' || typeof action.payload.category !== 'string' || !action.payload.category.trim()) {
+                console.warn("[Reliability] Skipping enqueue of invalid payload:", action.payload);
+                return state;
+            }
             const source = action.meta?.source || action.payload?.source || 'wheel';
             const payload = { ...action.payload, source };
             const nextQueue = [...state.queue, payload];
@@ -1917,11 +1930,12 @@ function App() {
         const activePlayerName = players[nextPlayerId];
 
         setTimeout(() => {
+            // RELIABILITY: safely normalize active player name before comparisons
+            const normalizedActivePlayerName = typeof activePlayerName === 'string' ? activePlayerName.toLowerCase() : '';
             // [GeminiFix: NullGuard]
             if (
                 gameState !== 'secretLoveRound' &&
-                typeof activePlayerName === 'string' &&
-                (activePlayerName || "").toLowerCase() === 'katy' &&
+                normalizedActivePlayerName === 'katy' &&
                 !secretRoundUsed &&
                 Math.random() < 0.15
             ) {
@@ -2033,22 +2047,33 @@ function App() {
     }, [enqueuePrompt]);
 
     const handleSpinFinish = useCallback((category, meta = { source: 'wheel' }) => {
+        // RELIABILITY: guard undefined winner/payload to prevent .toLowerCase() crash
+        if (typeof category !== 'string' || !category.trim()) {
+            console.warn("[Reliability] Invalid winner payload:", category);
+            return;
+        }
+        // RELIABILITY: safe normalization of category string
+        const normalizedCategory = category.toLowerCase();
         const { truthPrompts, darePrompts, triviaQuestions } = prompts;
         const source = meta?.source || 'wheel';
+        // RELIABILITY: branch prompt pools using normalized category
         const list =
-            category === 'truth'
+            normalizedCategory === 'truth'
                 ? (isExtremeMode ? truthPrompts.extreme : [...truthPrompts.normal, ...truthPrompts.spicy])
-                : category === 'dare'
+                : normalizedCategory === 'dare'
                 ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
                 : [...triviaQuestions.normal];
 
         const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
-        const text = pickPrompt(category, validList);
-        const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[category] || 'Your Challenge';
+        // RELIABILITY: ensure prompt selection uses normalized category key
+        const text = pickPrompt(normalizedCategory, validList);
+        // RELIABILITY: ensure title lookup uses normalized key
+        const title = { truth: 'The Velvet Truth...', dare: 'The Royal Dare!', trivia: 'The Trivia Challenge' }[normalizedCategory] || 'Your Challenge';
 
         if (!text) return;
 
-        const prompt = { title, text, type: category, source };
+        // RELIABILITY: ensure prompt includes normalized category for queue validation
+        const prompt = { title, text, type: normalizedCategory, category: normalizedCategory, source };
         pendingPromptRef.current = prompt;
         enqueuePrompt(prompt, { source });
     }, [prompts, isExtremeMode, pickPrompt, enqueuePrompt]);
