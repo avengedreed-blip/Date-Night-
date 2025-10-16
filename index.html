@@ -12,6 +12,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
+    <!-- RELIABILITY: Icons referenced by the manifest must exist under /public/icon-192.png and /public/icon-512.png. -->
     <link rel="manifest" href="/manifest.json" />
 
     <!-- Preconnect + font -->
@@ -30,11 +31,45 @@
 
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('Service Worker registered'))
-            .catch(err => console.warn('Service Worker failed:', err));
-        });
+        const registerServiceWorker = async () => {
+          try {
+            const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            // RELIABILITY: Trigger update checks as soon as registration resolves.
+            registration.update();
+
+            const activateWorker = worker => {
+              // RELIABILITY: Tell the waiting worker to activate immediately.
+              worker.postMessage({ type: 'SKIP_WAITING' });
+            };
+
+            if (registration.waiting) {
+              activateWorker(registration.waiting);
+            }
+
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (!newWorker) return;
+
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  activateWorker(newWorker);
+                }
+              });
+            });
+
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              if (refreshing) return;
+              refreshing = true;
+              // RELIABILITY: Reload to surface the latest shell after activation.
+              window.location.reload();
+            });
+          } catch (error) {
+            console.warn('Service worker registration failed', error);
+          }
+        };
+
+        window.addEventListener('load', registerServiceWorker);
       }
     </script>
 

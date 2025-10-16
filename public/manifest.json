@@ -1,21 +1,25 @@
 {
   "name": "Date Night",
   "short_name": "DateNight",
-  "start_url": ".",
+  "id": "/",
+  "scope": "/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
+  "description": "Plan and enjoy your next date night with curated ideas and playlists.",
   "icons": [
     {
-      "src": "/assets/icon-192.png",
-
+      "src": "./icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable any"
     }
   ]
 }
