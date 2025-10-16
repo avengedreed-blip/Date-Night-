@@ -122,3 +122,15 @@ self.addEventListener('activate', event => {
     )
   );
 });
+
+// RELIABILITY: background-sync foundation
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-prompts') {
+    event.waitUntil(
+      (async () => {
+        console.log('[Reliability] Background sync triggered');
+        // placeholder for future data flush
+      })()
+    );
+  }
+});
