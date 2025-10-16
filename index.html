@@ -13,7 +13,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <!-- RELIABILITY: Icons referenced by the manifest must exist under /public/icon-192.png and /public/icon-512.png. -->
-    <link rel="manifest" href="/manifest.json" />
+    <!-- RELIABILITY: use relative path to prevent 401 on manifest.json -->
+    <link rel="manifest" href="./manifest.json" />
 
     <!-- Preconnect + font -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -33,7 +34,9 @@
       if ('serviceWorker' in navigator) {
         const registerServiceWorker = async () => {
           try {
-            const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            // RELIABILITY: register service worker within app scope using relative paths.
+            const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+            console.info('[SW] Registered:', registration.scope);
             // RELIABILITY: Trigger update checks as soon as registration resolves.
             registration.update();
 
@@ -65,7 +68,8 @@
               window.location.reload();
             });
           } catch (error) {
-            console.warn('Service worker registration failed', error);
+            // RELIABILITY: guard against registration crashes to avoid UI hangs.
+            console.warn('[SW] Registration failed:', error);
           }
         };
 

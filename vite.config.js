@@ -9,7 +9,8 @@ try {
 } catch {}
 
 export default defineConfig({
-  base: "./",
+  // RELIABILITY: ensure SW + manifest load from root scope on Vercel
+  base: "/",
   plugins: [react()],
   publicDir: "public",
   // RELIABILITY: Ensure idb-keyval imports resolve to local shim for offline builds.
