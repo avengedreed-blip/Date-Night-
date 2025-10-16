@@ -12,6 +12,12 @@ export default defineConfig({
   base: "./",
   plugins: [react()],
   publicDir: "public",
+  // RELIABILITY: Ensure idb-keyval imports resolve to local shim for offline builds.
+  resolve: {
+    alias: {
+      'idb-keyval': '/src/internal-idb-keyval.js',
+    },
+  },
   build: {
     target: "esnext",
     cssMinify: true,
