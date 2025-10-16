@@ -3,10 +3,31 @@
 /* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
+// RELIABILITY: IndexedDB prompt storage helpers.
+import { dbStore } from './storage';
 
 // Ensure Tone.js is globally available
 import * as Tone from "tone";
 if (!window.Tone) window.Tone = Tone;
+
+// RELIABILITY: app version migration guard
+const APP_VERSION = '1.3.0';
+// RELIABILITY: Preserve legacy prompt payloads across version resets.
+let legacyPromptSnapshot = null;
+try {
+    const storedVersion = localStorage.getItem('app_version');
+    if (storedVersion !== APP_VERSION) {
+        legacyPromptSnapshot = localStorage.getItem('prompts');
+        localStorage.clear();
+        localStorage.setItem('app_version', APP_VERSION);
+        if (legacyPromptSnapshot) {
+            localStorage.setItem('prompts', legacyPromptSnapshot);
+        }
+    }
+} catch (err) {
+    // RELIABILITY: Surface guard failures for diagnostics.
+    console.warn('[Reliability] Failed to apply app version guard', err);
+}
 
 // RELIABILITY: Centralized gesture-based audio resume helper.
 const resumeAudioOnGesture = async () => {
@@ -375,34 +396,82 @@ const normalizeStoredPrompts = (value) => {
 };
 
 const useLocalStoragePrompts = () => {
-  const [prompts, setPrompts] = useState(() => {
-    try {
-      const stored = localStorage.getItem("prompts");
-      if (!stored) return cloneDefaultPrompts();
-      return normalizeStoredPrompts(JSON.parse(stored));
-    } catch {
-      return cloneDefaultPrompts();
-    }
-  });
+    // RELIABILITY: Initialize prompt state with normalized defaults.
+    const [prompts, setPrompts] = useState(() => cloneDefaultPrompts());
+    // RELIABILITY: Track async prompt hydration status.
+    const [isPromptsLoading, setIsPromptsLoading] = useState(true);
 
-  const updatePrompts = (newPrompts) => {
-    const normalized = normalizeStoredPrompts(newPrompts);
-    setPrompts(normalized);
-    localStorage.setItem("prompts", JSON.stringify(normalized));
-  };
+    // RELIABILITY: hydrate prompts from IndexedDB store on mount.
+    useEffect(() => {
+        let isActive = true;
+        (async () => {
+            try {
+                const stored = await dbStore.getPrompt('prompts');
+                if (stored) {
+                    const normalized = normalizeStoredPrompts(stored);
+                    if (isActive) {
+                        setPrompts(normalized);
+                    }
+                    return;
+                }
 
-  const resetPrompts = () => {
-    const defaults = cloneDefaultPrompts();
-    setPrompts(defaults);
-    localStorage.setItem("prompts", JSON.stringify(defaults));
-  };
+                const legacy = localStorage.getItem('prompts');
+                if (legacy) {
+                    try {
+                        const parsed = JSON.parse(legacy);
+                        const normalized = normalizeStoredPrompts(parsed);
+                        if (isActive) {
+                            setPrompts(normalized);
+                        }
+                        await dbStore.setPrompt('prompts', normalized);
+                        localStorage.removeItem('prompts');
+                        return;
+                    } catch (err) {
+                        // RELIABILITY: visibility into malformed legacy prompt payloads.
+                        console.warn('[Reliability] Failed to parse legacy prompts during hydration', err);
+                    }
+                }
 
-  return {
-    prompts,
-    updatePrompts,
-    resetPrompts,
-    isLoading: false,
-  };
+                if (isActive) {
+                    setPrompts(cloneDefaultPrompts());
+                }
+            } catch (err) {
+                // RELIABILITY: detect IndexedDB hydration failures promptly.
+                console.warn('[Reliability] Failed to hydrate prompts from IndexedDB', err);
+            } finally {
+                if (isActive) {
+                    setIsPromptsLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            isActive = false;
+        };
+    }, []);
+
+    // RELIABILITY: Keep prompts persisted when mutated.
+    const updatePrompts = (newPrompts) => {
+        const normalized = normalizeStoredPrompts(newPrompts);
+        setPrompts(normalized);
+        // RELIABILITY: persist normalized prompts through IndexedDB store.
+        dbStore.setPrompt('prompts', normalized);
+    };
+
+    // RELIABILITY: Reset prompts to defaults and persist immediately.
+    const resetPrompts = () => {
+        const defaults = cloneDefaultPrompts();
+        setPrompts(defaults);
+        // RELIABILITY: persist reset prompts through IndexedDB store.
+        dbStore.setPrompt('prompts', defaults);
+    };
+
+    return {
+        prompts,
+        updatePrompts,
+        resetPrompts,
+        isLoading: isPromptsLoading,
+    };
 };
 
 const useParallax = (strength = 10) => {
@@ -1708,7 +1777,24 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
-    
+
+    useEffect(() => {
+        // RELIABILITY: migrate legacy localStorage prompts to IndexedDB
+        (async () => {
+            const legacy = legacyPromptSnapshot ?? localStorage.getItem('prompts');
+            if (legacy) {
+                try {
+                    const parsed = JSON.parse(legacy);
+                    await dbStore.setPrompt('prompts', parsed);
+                    localStorage.removeItem('prompts');
+                } catch (err) {
+                    // RELIABILITY: expose migration failures for debugging.
+                    console.warn('[Reliability] Failed to migrate legacy prompts', err);
+                }
+            }
+        })();
+    }, []);
+
     // Use the new prompt queue hook
     const { modalState, setModalState, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
     const modalStateRef = useRef(modalState); // Keep ref for legacy dependencies if any
