@@ -22,7 +22,8 @@ export default class FallbackBoundary extends React.Component {
     try {
       if (typeof window !== 'undefined') {
         clearTimeout(this._reloadTimer);
-        this._reloadTimer = setTimeout(() => window.location.reload(), 1500);
+        // DIAGNOSTIC: disable auto reload to show captured error
+        // this._reloadTimer = setTimeout(() => window.location.reload(), 1500);
       }
     } catch {}
   }
