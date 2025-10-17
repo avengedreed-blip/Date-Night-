@@ -156,29 +156,29 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* VISUAL: ensure parallax sits behind everything */
+/* VISUAL: parallax sits behind everything with transparent alpha gradient */
 #parallax-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(circle at 50% 60%, var(--theme-accent) 0%, transparent 80%);
-  opacity: 0.08; /* lowered for particle visibility */
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.25) 0%, transparent 70%);
+  opacity: 0.08;
   mix-blend-mode: lighten;
   pointer-events: none;
 }
 
-/* VISUAL: keep ambient glow subtle and transparent */
+/* VISUAL: subtle glow overlay above parallax but below particles */
 #ambient-glow {
   position: fixed;
   inset: 0;
   z-index: 1;
-  background: radial-gradient(circle at 50% 60%, var(--theme-highlight) 0%, transparent 80%);
-  opacity: 0.04; /* reduced slightly */
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-highlight-rgb),0.2) 0%, transparent 70%);
+  opacity: 0.04;
   mix-blend-mode: screen;
   pointer-events: none;
 }
 
-/* VISUAL: elevate particle canvas above parallax and glow */
+/* VISUAL: ensure particle layer renders above parallax and glow */
 .particle-canvas,
 .particle-background {
   position: fixed;
@@ -186,7 +186,7 @@ body, #app-content {
   z-index: 10;
   width: 100%;
   height: 100%;
-  opacity: 0.85;
+  opacity: 0.9;
   pointer-events: none;
   object-fit: cover;
   mix-blend-mode: screen;
@@ -198,10 +198,10 @@ body, #app-content {
   transition: background-color 0.5s ease-in-out;
 }
 
-/* Main app layer above overlays */
+/* VISUAL: main UI layer stays above layered backgrounds */
 #app-content {
   position: relative;
-  z-index: 10;
+  z-index: 20;
 }
 
 /* ===========================================================

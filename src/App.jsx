@@ -940,7 +940,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         const rimWidth = 8;
         ctx.strokeStyle = rimColors.low;
         ctx.lineWidth = rimWidth + 2;
-        const host = document.getElementById('app-container') || document.documentElement;
+        // VISUAL: align rim highlight sampling with new root wrapper id
+        const host = document.getElementById('app-root') || document.documentElement;
         const themeHighlight = getComputedStyle(host).getPropertyValue('--theme-highlight').trim() || '#FFD700';
         ctx.shadowColor = themeHighlight;
         ctx.shadowBlur = 15;
@@ -2621,120 +2622,123 @@ function App() {
 
     return (
         <div
-            id="app-container"
+            id="app-root"
             className={`min-h-screen ${activeVisualTheme.themeClass} font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`}
             style={{
                 '--pulse-glow-intensity': `${pulseLevel / 100}`,
                 '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`
             }}
         >
+            {/* VISUAL: root wrapper keeps visual layers aligned outside transformed regions */}
+            {/* VISUAL: particle layer mounted outside app-content for full-screen visibility */}
+            <ParticleBackground
+                currentTheme={backgroundTheme}
+                pulseLevel={pulseLevel}
+                bpm={audioEngine.getCurrentBpm()}
+                reducedMotion={prefersReducedMotion}
+            />
             <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
-                <div className={`bg-layer ${activeBg === 1 ? 'opacity-100' : 'opacity-0'} ${prevBackgroundClass}`} />
-                <div className={`bg-layer ${activeBg === 2 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`} />
-
-                {/* VISUAL: All background layers ordered as follows:
-                   - z-[-1]  : base (if used)
-                   - z-0     : parallax-bg
-                   - z-1     : ambient-glow
-                   - z-10    : particles
-                   - z-20+   : UI and wheel */}
-                {/* VISUAL: parallax background layer behind UI - reacts to isSpinning */}
-                <motion.div
-                    id="parallax-bg"
-                    className="fixed inset-0 pointer-events-none"
-                    initial={{ scale: 1, opacity: 0.15 }}
-                    animate={typeof isSpinning !== 'undefined' && isSpinning
-                        ? { scale: 1.1, opacity: 0.3 }
-                        : { scale: 1, opacity: 0.15 }}
-                    transition={{ duration: 0.8, ease: 'easeInOut' }}
-                />
-                {/* VISUAL: particle background above parallax */}
-                <ParticleBackground
-                    currentTheme={backgroundTheme}
-                    pulseLevel={pulseLevel}
-                    bpm={audioEngine.getCurrentBpm()}
-                    reducedMotion={prefersReducedMotion}
-                />
-                {/* VISUAL: ambient glow overlay above parallax but below interactive layers */}
                 <div
-                    id="ambient-glow"
-                    className="fixed inset-0 pointer-events-none"
-                />
-                <div className="hdr-glow-overlay" />
-                <Vignette />
-                <NoiseOverlay reducedMotion={prefersReducedMotion} />
-                <div className="aurora-reflect" />
-                <RadialLighting reducedMotion={prefersReducedMotion} />
-                
-                <AnimatePresence>
-                {showConfetti && (
-                    <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={currentTheme} reducedMotion={prefersReducedMotion} />
-                )}
-                {showPowerSurge && (
-                    <PowerSurgeEffect key="power-surge" onComplete={() => setShowPowerSurge(false)} reducedMotion={prefersReducedMotion} />
-                )}
-                </AnimatePresence>
+                    id="app-content"
+                    aria-hidden={!!modalState.type}
+                    className="w-full h-screen relative overflow-hidden"
+                >
+                    <div className={`bg-layer ${activeBg === 1 ? 'opacity-100' : 'opacity-0'} ${prevBackgroundClass}`} />
+                    <div className={`bg-layer ${activeBg === 2 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`} />
 
-                <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
-                    {renderContent()}
-                </div>
-                
-                <AnimatePresence initial={false}>
-                    <ModalManager
-                        modalState={modalState}
-                        handlePromptModalClose={handlePromptModalClose}
-                        handleConsequenceClose={handleConsequenceClose}
-                        handleRefuse={handleRefuse}
-                        setModalState={setModalState}
-                        activeVisualTheme={activeVisualTheme}
+                    {/* VISUAL: maintain background depth hierarchy inside app-content */}
+                    {/* VISUAL: parallax background layer behind UI - reacts to isSpinning */}
+                    <motion.div
+                        id="parallax-bg"
+                        className="fixed inset-0 pointer-events-none"
+                        initial={{ scale: 1, opacity: 0.15 }}
+                        animate={typeof isSpinning !== 'undefined' && isSpinning
+                            ? { scale: 1.1, opacity: 0.3 }
+                            : { scale: 1, opacity: 0.15 }}
+                        transition={{ duration: 0.8, ease: 'easeInOut' }}
                     />
-                    {modalState.type === "extremeIntro" && (
-                        <>
-                        <ExtremeIntroEffect key={`introfx-${currentTheme}`} theme={currentTheme} reducedMotion={prefersReducedMotion} />
-                        <ExtremeIntroModal isOpen={true} onClose={handleExtremeIntroClose} activeVisualTheme={activeVisualTheme} />
-                        </>
-                    )}
-                    {modalState.type === "secretMessage" && (
-                        <SecretMessageModal 
-                            key="secret-message" 
-                            isOpen={true} 
-                            outcome={modalState.data.outcome} 
-                            onClose={handleSecretLoveRoundClose} 
-                            activeVisualTheme={activeVisualTheme} />
-                    )}
-                    {modalState.type === "editor" && (
-                        <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
-                    )}
-                    {modalState.type === "settings" && (
-                        <SettingsModal
-                        key="settings"
-                        isOpen={true}
-                        onClose={() => setModalState({ type: "", data: null })}
-                        settings={settings}
-                        onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
-                        isMuted={isMuted}
-                        onMuteToggle={handleToggleMute}
-                        onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })}
-                        onThemeChange={handleThemeChange}
-                        currentTheme={currentTheme}
-                        onRestart={() => setModalState({ type: "confirmRestart", data: {} })}
-                        onQuit={() => setModalState({ type: "confirmQuit", data: {} })}
-                        activeVisualTheme={activeVisualTheme}
-                        reducedMotion={prefersReducedMotion}
-                        onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)}
-                        canUseForeverTheme={isSecretThemeUnlocked}
+                    {/* VISUAL: ambient glow overlay above parallax but below interactive layers */}
+                    <div
+                        id="ambient-glow"
+                        className="fixed inset-0 pointer-events-none"
+                    />
+                    <div className="hdr-glow-overlay" />
+                    <Vignette />
+                    <NoiseOverlay reducedMotion={prefersReducedMotion} />
+                    <div className="aurora-reflect" />
+                    <RadialLighting reducedMotion={prefersReducedMotion} />
+
+                    <AnimatePresence>
+                        {showConfetti && (
+                            <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={currentTheme} reducedMotion={prefersReducedMotion} />
+                        )}
+                        {showPowerSurge && (
+                            <PowerSurgeEffect key="power-surge" onComplete={() => setShowPowerSurge(false)} reducedMotion={prefersReducedMotion} />
+                        )}
+                    </AnimatePresence>
+
+                    {/* VISUAL: elevate primary UI above background stack */}
+                    <div className="relative z-[20] h-full">
+                        {renderContent()}
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                        <ModalManager
+                            modalState={modalState}
+                            handlePromptModalClose={handlePromptModalClose}
+                            handleConsequenceClose={handleConsequenceClose}
+                            handleRefuse={handleRefuse}
+                            setModalState={setModalState}
+                            activeVisualTheme={activeVisualTheme}
                         />
-                    )}
-                    {modalState.type === "confirmReset" && (
-                        <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
-                    )}
-                    {modalState.type === "confirmRestart" && (
-                        <ConfirmModal key="confirm-restart" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />
-                    )}
-                    {modalState.type === "confirmQuit" && (
-                        <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
-                    )}
-                </AnimatePresence>
+                        {modalState.type === "extremeIntro" && (
+                            <>
+                            <ExtremeIntroEffect key={`introfx-${currentTheme}`} theme={currentTheme} reducedMotion={prefersReducedMotion} />
+                            <ExtremeIntroModal isOpen={true} onClose={handleExtremeIntroClose} activeVisualTheme={activeVisualTheme} />
+                            </>
+                        )}
+                        {modalState.type === "secretMessage" && (
+                            <SecretMessageModal
+                                key="secret-message"
+                                isOpen={true}
+                                outcome={modalState.data.outcome}
+                                onClose={handleSecretLoveRoundClose}
+                                activeVisualTheme={activeVisualTheme} />
+                        )}
+                        {modalState.type === "editor" && (
+                            <EditorModal key="editor" isOpen={true} onClose={handleEditorClose} prompts={prompts} onReset={() => setModalState({ type: "confirmReset", data: { from: "settings" } })} activeVisualTheme={activeVisualTheme} />
+                        )}
+                        {modalState.type === "settings" && (
+                            <SettingsModal
+                            key="settings"
+                            isOpen={true}
+                            onClose={() => setModalState({ type: "", data: null })}
+                            settings={settings}
+                            onSettingsChange={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
+                            isMuted={isMuted}
+                            onMuteToggle={handleToggleMute}
+                            onEditPrompts={() => setModalState({ type: "editor", data: { from: "settings" } })}
+                            onThemeChange={handleThemeChange}
+                            currentTheme={currentTheme}
+                            onRestart={() => setModalState({ type: "confirmRestart", data: {} })}
+                            onQuit={() => setModalState({ type: "confirmQuit", data: {} })}
+                            activeVisualTheme={activeVisualTheme}
+                            reducedMotion={prefersReducedMotion}
+                            onReducedMotionToggle={() => setPrefersReducedMotion((p) => !p)}
+                            canUseForeverTheme={isSecretThemeUnlocked}
+                            />
+                        )}
+                        {modalState.type === "confirmReset" && (
+                            <ConfirmModal key="confirm-reset" isOpen={true} onClose={() => { setModalState({ type: modalState.data?.from === "settings" ? "editor" : "settings", data: { from: "settings" } }); }} onConfirm={handleConfirmReset} title="Confirm Reset" message="Are you sure? This will replace all prompts with the defaults." activeVisualTheme={activeVisualTheme} />
+                        )}
+                        {modalState.type === "confirmRestart" && (
+                            <ConfirmModal key="confirm-restart" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleRestartGame} title="Confirm Restart" message="Are you sure? This will restart the game and reset all progress." activeVisualTheme={activeVisualTheme} />
+                        )}
+                        {modalState.type === "confirmQuit" && (
+                            <ConfirmModal key="confirm-quit" isOpen={true} onClose={() => setModalState({ type: "settings", data: null })} onConfirm={handleQuitGame} title="Confirm Quit" message="Are you sure you want to quit? All progress will be lost." activeVisualTheme={activeVisualTheme} />
+                        )}
+                    </AnimatePresence>
+                </div>
             </MotionConfig>
         </div>
     );
