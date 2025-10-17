@@ -77,8 +77,9 @@ const scheduleMicrotask = (fn) => {
 // [GeminiFix: ManifestHardening]
 // Non-critical asset error suppression
 window.addEventListener("error", (e) => {
-  if (e.target instanceof HTMLScriptElement || e.target instanceof HTMLLinkElement) {
-    if (e.message.includes("manifest") || e.message.includes("favicon")) {
+    if (e.target instanceof HTMLScriptElement || e.target instanceof HTMLLinkElement) {
+        // RELIABILITY: Guard error message string checks before substring evaluation.
+        if (typeof e.message === 'string' && (e.message.includes("manifest") || e.message.includes("favicon"))) {
       e.preventDefault();
     }
   }
@@ -2273,7 +2274,8 @@ function App() {
 
     const pickPrompt = useCallback((category, list) => {
         const recent = recentPrompts[category] || [];
-        const available = list.filter(p => !recent.includes(p));
+        // RELIABILITY: Ensure recent prompt cache supports includes lookups.
+        const available = list.filter(p => !(Array.isArray(recent) && recent.includes(p)));
         const choice = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : list[Math.floor(Math.random() * list.length)] || 'No prompts available.';
         setRecentPrompts(prev => ({ ...prev, [category]: [...recent.slice(-4), choice] }));
         return choice;
