@@ -44,35 +44,53 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// RELIABILITY: hardened fetch handler with analytics ignore + safe fallbacks
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
-  // RELIABILITY: use network-first for documents and scripts to keep app fresh.
-  if (request.destination === 'document' || request.url.endsWith('.js')) {
+  const url = request.url;
+
+  // RELIABILITY: skip analytics/live/feedback URLs entirely
+  if (url.includes('vercel.live') || url.includes('feedback.js')) {
+    return; // don't intercept
+  }
+
+  const isDocOrJs =
+    request.destination === 'document' || url.endsWith('.js');
+
+  if (isDocOrJs) {
     event.respondWith(
       (async () => {
         try {
-          const response = await fetch(request);
-          if (response && response.ok) {
-            const copy = response.clone();
+          const net = await fetch(request);
+          if (net && net.ok) {
+            const copy = net.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
           }
-          return response;
-        } catch (error) {
+          return net;
+        } catch (err) {
+          console.warn('[Reliability] SW fetch failed:', url, err);
           const cached = await caches.match(request);
-          if (cached) return cached;
-          throw error;
+          // RELIABILITY: graceful fallback response if nothing cached
+          return cached || Response.error();
         }
       })()
     );
-    return;
+  } else {
+    event.respondWith(
+      (async () => {
+        try {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          return await fetch(request);
+        } catch (err) {
+          console.warn('[Reliability] SW fetch failed (non-critical):', url, err);
+          return Response.error();
+        }
+      })()
+    );
   }
-
-  // RELIABILITY: default to cache-first for static assets to ensure offline support.
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request))
-  );
 });
 
 self.addEventListener('sync', (event) => {
