@@ -1,5 +1,6 @@
 // RELIABILITY: simple offline cache; avoids blocked Workbox import
-const CACHE_VERSION = 'v1.1.0';
+const APP_VERSION = '1.3.0';
+const CACHE_VERSION = `pulse-shell-${APP_VERSION}`;
 // RELIABILITY: Removed /favicon.ico to prevent install rejection on missing asset
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
@@ -50,13 +51,20 @@ self.addEventListener('fetch', (event) => {
   // RELIABILITY: use network-first for documents and scripts to keep app fresh.
   if (request.destination === 'document' || request.url.endsWith('.js')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+      (async () => {
+        try {
+          const response = await fetch(request);
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
           return response;
-        })
-        .catch(() => caches.match(request))
+        } catch (error) {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          throw error;
+        }
+      })()
     );
     return;
   }
