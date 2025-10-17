@@ -35,13 +35,15 @@ export const attachAudioGestureListeners = () => {
 export const silenceToneErrors = () => {
   window.addEventListener('unhandledrejection', (event) => {
     const msg = String(event.reason || '');
-    const isAutoplay = msg.includes('AudioContext') || msg.includes('NotAllowedError');
+    // RELIABILITY: Guard autoplay rejection heuristics against non-string payloads.
+    const isAutoplay = typeof msg === 'string' && (msg.includes('AudioContext') || msg.includes('NotAllowedError'));
     if (!audioUnlocked && isAutoplay) {
       console.warn('[Reliability] Suppressed pre-gesture audio rejection:', msg);
       event.preventDefault();
       return;
     }
-    if (audioUnlocked && msg.includes('Tone')) {
+    // RELIABILITY: Only surface Tone.js errors when message payload supports includes.
+    if (audioUnlocked && typeof msg === 'string' && msg.includes('Tone')) {
       console.error('[Reliability] Surfaced Tone.js rejection:', event.reason);
     }
   });
