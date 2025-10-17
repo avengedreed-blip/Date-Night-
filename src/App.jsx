@@ -617,7 +617,14 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
         };
     }, [currentTheme, pulseLevel, bpm, reducedMotion]);
 
-    return <canvas ref={canvasRef} className="particle-canvas" style={style}></canvas>;
+    // VISUAL: ensure particle canvas renders above parallax but below primary UI
+    return (
+        <canvas
+            ref={canvasRef}
+            className="particle-canvas"
+            style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 10, ...(style || {}) }}
+        ></canvas>
+    );
 });
 
 const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
@@ -2648,16 +2655,21 @@ function App() {
 
                 <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
 {/* VISUAL: parallax background layer behind UI - reacts to isSpinning */}
+{/* // RELIABILITY: ensure parallax background uses a single transition declaration */}
+{/* // VISUAL: position parallax gradient behind particles with lighten blend */}
 <motion.div
   id="parallax-bg"
-  className="fixed inset-0 pointer-events-none z-0"
+  className="fixed inset-0 pointer-events-none z-[-1]"
   initial={{ scale: 1, opacity: 0.15 }}
   animate={isSpinning ? { scale: 1.1, opacity: 0.3 } : { scale: 1, opacity: 0.15 }}
-  transition={{ duration: 0.8, ease: "easeInOut" }}
   transition={{ duration: 0.8, ease: 'easeInOut' }}
-  style={{ background: 'radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%)' }}
+  style={{
+    background: 'radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%)',
+    mixBlendMode: 'lighten'
+  }}
 />
 {/* VISUAL: ambient glow overlay above parallax but below content */}
+{/* // VISUAL: ensure ambient glow remains above parallax background */}
 <div
   id="ambient-glow"
   className="fixed inset-0 pointer-events-none z-0"
