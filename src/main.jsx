@@ -4,21 +4,14 @@ import App from "./App.jsx";
 import FallbackBoundary from "./FallbackBoundary.jsx";
 import "./index.css";
 
-// DIAGNOSTIC: global error and rejection capture
-window.addEventListener("error", (e) => {
-  try {
-    const msg = `[GlobalError] ${e.message || e.error}`;
-    console.error(msg);
-    localStorage.setItem("lastError", msg);
-  } catch {}
+window.addEventListener('error', e => {
+  const msg = `[GlobalError] ${e.error?.name || ''}: ${e.message}`;
+  localStorage.setItem('lastError', msg);
 });
 
-window.addEventListener("unhandledrejection", (e) => {
-  try {
-    const msg = `[UnhandledRejection] ${e.reason?.message || e.reason}`;
-    console.error(msg);
-    localStorage.setItem("lastError", msg);
-  } catch {}
+window.addEventListener('unhandledrejection', e => {
+  const msg = `[PromiseRejection] ${e.reason?.name || ''}: ${e.reason?.message}`;
+  localStorage.setItem('lastError', msg);
 });
 
 // RELIABILITY: environment sanity check
