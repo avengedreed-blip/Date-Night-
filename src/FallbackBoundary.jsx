@@ -11,12 +11,12 @@ export default class FallbackBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(err, info) {
-    console.error('[Reliability] Boundary caught error:', err, info);
+  componentDidCatch(error, info) {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('lastError', err?.message || 'unknown');
-      }
+      const msg = `[ReactError] ${error?.name}: ${error?.message}`;
+      const stack = info?.componentStack || error?.stack || '';
+      console.error(msg, stack);
+      localStorage.setItem('lastError', msg + '\n' + stack);
     } catch {}
     // RELIABILITY: schedule reload outside render
     try {
@@ -35,30 +35,16 @@ export default class FallbackBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
-      // DIAGNOSTIC: display stored diagnostic error message
-      let msg = "Unknown runtime error";
-      try {
-        msg = localStorage.getItem("lastError") || msg;
-      } catch {}
+      let msg = 'No details';
+      try { msg = localStorage.getItem('lastError') || msg; } catch {}
       return (
-        <div
-          style={{
-            color: "white",
-            background: "black",
-            width: "100vw",
-            height: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            textAlign: "center",
-            padding: "2rem"
-          }}
-        >
+        <div style={{
+          background:'#000', color:'#fff', width:'100vw', height:'100vh',
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          fontFamily:'monospace', whiteSpace:'pre-wrap', padding:'2rem'
+        }}>
           <h3>Something went wrong.</h3>
-          <pre style={{ marginTop: "1rem", fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>
-            {msg}
-          </pre>
+          <pre>{msg}</pre>
         </div>
       );
     }
