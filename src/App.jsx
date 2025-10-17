@@ -664,13 +664,14 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
         // RELIABILITY: compute winner category based on pointer alignment (bias slightly negative)
-        const sliceAngle = 360 / CATEGORIES.length;
-        // RELIABILITY: normalize rotation into [0, 360) range for consistent indexing
-        const normalized = ((-rotation + 90) % 360 + 360) % 360;
-        // RELIABILITY: apply slight negative bias to center pointer alignment visually and logically
-        const adjusted = (normalized - sliceAngle / 6 + 360) % 360;
-        // RELIABILITY: use floor to avoid boundary bleed into neighboring slices
-        const sliceIndex = Math.floor(adjusted / sliceAngle);
+        // RELIABILITY: sub-degree-stable alignment to prevent boundary misclassification
+        const sliceAngle = 360 / CATEGORIES.length; // RELIABILITY: stable slice width for category segmentation
+        const normalized = ((-rotation + 90) % 360 + 360) % 360; // RELIABILITY: normalized pointer angle within [0, 360)
+        const EPSILON = 0.00001; // RELIABILITY: epsilon guards against floating-point drift
+        const adjusted = (normalized - sliceAngle / 6 + 360 + EPSILON) % 360; // RELIABILITY: bias centers pointer with jitter padding
+        let sliceIndex = Math.floor(adjusted / sliceAngle); // RELIABILITY: floor index to map to slice
+        // RELIABILITY: clamp overflow for 359.9999° edge cases
+        if (sliceIndex >= CATEGORIES.length) sliceIndex = CATEGORIES.length - 1; // RELIABILITY: enforce upper bound safety net
         // RELIABILITY: capture raw winner before normalization
         const rawWinner = CATEGORIES[sliceIndex];
         // RELIABILITY: guard undefined winner/payload to prevent .toLowerCase() crash
@@ -2119,6 +2120,12 @@ function App() {
     const handleToggleMute = useCallback(() => setIsMuted(prev => !prev), []);
 
     const endRoundAndStartNew = useCallback(() => {
+        const wasExtremeMode = isExtremeMode; // GAMELOGIC: capture previous extreme state before reset
+        // GAMELOGIC: reset extreme mode at start of every round
+        if (isExtremeMode) { // GAMELOGIC: only clear flag when previously active
+            setIsExtremeMode(false); // GAMELOGIC: clear extreme flag for fresh round
+            console.info('[Reliability] Extreme mode cleared for new round'); // GAMELOGIC: log lifecycle reset
+        }
         const nextPlayerId = currentPlayer === 'p1' ? 'p2' : 'p1';
         const activePlayerName = players[nextPlayerId];
 
@@ -2142,7 +2149,7 @@ function App() {
             }
         }, 100);
 
-        if (isExtremeMode || gameState === 'secretLoveRound') {
+        if (wasExtremeMode || gameState === 'secretLoveRound') { // GAMELOGIC: maintain cleanup when prior round was extreme
             setIsExtremeMode(false);
             setExtremeRoundSource(null);
             if (!(isSecretThemeUnlocked && secretSticky)) {
@@ -2206,14 +2213,17 @@ function App() {
 
     const handleExtremeIntroClose = useCallback(() => {
         setModalState({ type: "", data: null });
-        setIsExtremeMode(true);
-        handleThemeChange('crimsonFrenzy');
-        setGameState("extremeRound");
-        setExtremeModeReady(true);
+        // GAMELOGIC: trigger extreme mode only if not already active this round
+        if (!isExtremeMode) { // GAMELOGIC: guard against duplicate extreme activation in same round
+            setIsExtremeMode(true); // GAMELOGIC: activate extreme flag for current round
+            handleThemeChange('crimsonFrenzy'); // GAMELOGIC: shift theme into extreme palette once per round
+            setGameState("extremeRound"); // GAMELOGIC: enter extreme round state machine
+            setExtremeModeReady(true); // GAMELOGIC: mark extreme prompt pipeline ready
+        }
         if (extremeRoundSource === 'spark' && (roundCount + 1) % 5 === 0) {
             setTimeout(() => setPulseLevel(0), 1000);
         }
-    }, [extremeRoundSource, roundCount, handleThemeChange, setModalState]);
+    }, [extremeRoundSource, roundCount, handleThemeChange, setModalState, isExtremeMode]);
 
     const pickPrompt = useCallback((category, list) => {
         // DIAGNOSTIC: validate prompt selection inputs before accessing caches
