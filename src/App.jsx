@@ -1154,9 +1154,17 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
             drawWheel(ctx, size);
         };
         
-        document.fonts.ready.then(() => {
+        // RELIABILITY: guard against browsers lacking FontFaceSet API
+        const scheduleResize = () => {
             resizeHandle = requestAnimationFrame(resizeCanvas);
-        });
+        };
+
+        if (document.fonts?.ready) {
+            document.fonts.ready.then(scheduleResize);
+        } else {
+            // RELIABILITY: fallback — schedule resize on next frame
+            resizeHandle = requestAnimationFrame(resizeCanvas);
+        }
         window.addEventListener('resize', resizeCanvas);
 
         return () => {
