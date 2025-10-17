@@ -35,9 +35,30 @@ export default class FallbackBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
+      // DIAGNOSTIC: display stored diagnostic error message
+      let msg = "Unknown runtime error";
+      try {
+        msg = localStorage.getItem("lastError") || msg;
+      } catch {}
       return (
-        <div className="w-full h-screen flex items-center justify-center bg-black text-white">
-          <p>Something went wrong. Reloading…</p>
+        <div
+          style={{
+            color: "white",
+            background: "black",
+            width: "100vw",
+            height: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            textAlign: "center",
+            padding: "2rem"
+          }}
+        >
+          <h3>Something went wrong.</h3>
+          <pre style={{ marginTop: "1rem", fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>
+            {msg}
+          </pre>
         </div>
       );
     }
