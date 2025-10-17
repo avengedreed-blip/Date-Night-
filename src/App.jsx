@@ -661,16 +661,6 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
 
-    useEffect(() => {
-        if (!registerWatchdogControl) return;
-        // RELIABILITY: Surface finalize hook so watchdog routes through finishSpinNow.
-        registerWatchdogControl({
-            finish: (reason = 'watchdog') => finishSpinNow(reason),
-            isLocked: () => !!spinLock.current,
-        });
-        return () => registerWatchdogControl(null);
-    }, [registerWatchdogControl, finishSpinNow]);
-
     const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
         const sliceAngle = 360 / CATEGORIES.length;
@@ -711,6 +701,17 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
             setIsSpinInProgress(false);
         }
     }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
+
+    // RELIABILITY: Register watchdog only after finishSpinNow is defined to avoid TDZ.
+    useEffect(() => {
+        if (!registerWatchdogControl) return;
+        // RELIABILITY: Surface finalize hook so watchdog routes through finishSpinNow.
+        registerWatchdogControl({
+            finish: (reason = 'watchdog') => finishSpinNow(reason),
+            isLocked: () => !!spinLock.current,
+        });
+        return () => registerWatchdogControl(null);
+    }, [registerWatchdogControl, finishSpinNow]);
 
     // RELIABILITY: Force finalize when visibility changes or page hides mid-spin.
     useEffect(() => {
