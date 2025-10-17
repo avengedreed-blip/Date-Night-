@@ -407,7 +407,7 @@ const hexToRgb = (hex) => {
     } : null;
 };
 
-const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedMotion, style }) => {
+const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedMotion, style, className }) => {
     const canvasRef = useRef(null);
     const animationFrameId = useRef(null);
 
@@ -621,7 +621,8 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
     return (
         <canvas
             ref={canvasRef}
-            className="particle-canvas"
+            // VISUAL: allow external className injection for global positioning overrides
+            className={`particle-canvas${className ? ` ${className}` : ''}`}
             style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 10, ...(style || {}) }}
         ></canvas>
     );
@@ -2621,23 +2622,24 @@ function App() {
     };
 
     return (
-        <div
-            id="app-root"
-            className={`min-h-screen ${activeVisualTheme.themeClass} font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`}
-            style={{
-                '--pulse-glow-intensity': `${pulseLevel / 100}`,
-                '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`
-            }}
-        >
-            {/* VISUAL: root wrapper keeps visual layers aligned outside transformed regions */}
-            {/* VISUAL: particle layer mounted outside app-content for full-screen visibility */}
-            <ParticleBackground
-                currentTheme={backgroundTheme}
-                pulseLevel={pulseLevel}
-                bpm={audioEngine.getCurrentBpm()}
-                reducedMotion={prefersReducedMotion}
-            />
-            <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
+        <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
+            <div
+                id="app-root"
+                className={`min-h-screen ${activeVisualTheme.themeClass} font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`}
+                style={{
+                    '--pulse-glow-intensity': `${pulseLevel / 100}`,
+                    '--beat-duration': `${60 / audioEngine.getCurrentBpm()}s`
+                }}
+            >
+                {/* VISUAL: root wrapper keeps visual layers aligned outside transformed regions */}
+                {/* VISUAL: global particle layer mounted as sibling to app-content */}
+                <ParticleBackground
+                    currentTheme={backgroundTheme}
+                    pulseLevel={pulseLevel}
+                    bpm={audioEngine.getCurrentBpm()}
+                    reducedMotion={prefersReducedMotion}
+                    className="fixed inset-0 pointer-events-none z-10"
+                />
                 <div
                     id="app-content"
                     aria-hidden={!!modalState.type}
@@ -2739,8 +2741,8 @@ function App() {
                         )}
                     </AnimatePresence>
                 </div>
-            </MotionConfig>
-        </div>
+            </div>
+        </MotionConfig>
     );
 }
 
