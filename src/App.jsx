@@ -13,45 +13,7 @@ import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
 
 // Ensure Tone.js is globally available
-import * as Tone from "tone";
-// RELIABILITY: Guard Tone namespace wiring to avoid SSR ReferenceErrors.
-if (typeof window !== 'undefined' && !window.Tone) {
-    window.Tone = Tone;
-}
-
-// RELIABILITY: app version migration guard
-const APP_VERSION = '1.3.0';
-// RELIABILITY: Preserve legacy prompt payloads across version resets.
-let legacyPromptSnapshot = null;
-try {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const storage = window.localStorage;
-    const storedVersion = storage.getItem('app_version');
-    if (storedVersion !== APP_VERSION) {
-      // RELIABILITY: targeted migration to avoid wiping user settings
-      const keep = new Set(['app_version', 'settings', 'lastError', 'volume', 'musicVolume', 'sfxVolume', 'theme']);
-      const legacyPrompts = storage.getItem('prompts');
-      // remove anything not allowlisted
-      const toDelete = [];
-      for (let i = 0; i < storage.length; i++) {
-        const k = storage.key(i);
-        if (!keep.has(k)) {
-          // queue deletions (cannot mutate while iterating)
-          if (k) toDelete.push(k);
-        }
-      }
-      // second pass delete
-      toDelete.forEach((k) => storage.removeItem(k));
-
-      storage.setItem('app_version', APP_VERSION);
-      if (legacyPrompts) storage.setItem('prompts', legacyPrompts);
-      legacyPromptSnapshot = legacyPrompts;
-    }
-  }
-} catch (err) {
-  // RELIABILITY: Surface guard failures for diagnostics.
-  console.warn('[Reliability] Failed to apply app version guard', err);
-}
+import * as Tone from "tone"; // RELIABILITY: Tone namespace is imported without triggering browser side-effects during module load.
 
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
 const safeUUID = () => {
@@ -177,7 +139,7 @@ const useLocalStoragePrompts = () => {
                     return;
                 }
 
-                const legacy = localStorage.getItem('prompts');
+                const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem('prompts') : null; // RELIABILITY: Guard legacy prompt reads against missing storage.
                 if (legacy) {
                     try {
                         const parsed = JSON.parse(legacy);
@@ -186,7 +148,7 @@ const useLocalStoragePrompts = () => {
                             setPrompts(normalized);
                         }
                         await dbStore.setPrompt('prompts', normalized);
-                        localStorage.removeItem('prompts');
+                        if (typeof localStorage !== 'undefined') { localStorage.removeItem('prompts'); } // RELIABILITY: Clear migrated prompts only when storage exists.
                         return;
                     } catch (err) {
                         // RELIABILITY: visibility into malformed legacy prompt payloads.
@@ -927,19 +889,19 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         lastSpinTimeRef.current = now;
         spinLock.current = true; // Acquire lock
 
-        if (window?.Tone?.context?.state === 'suspended') {
-            // RELIABILITY: Await gesture resume to avoid playing audio before context unlock.
-            await resumeAudioOnGesture();
+        const toneReady = typeof window !== 'undefined' && !!window.Tone; // RELIABILITY: detect Tone availability before playback.
+        if (toneReady && window.Tone.context?.state === 'suspended') {
+            await resumeAudioOnGesture(); // RELIABILITY: Ensure gesture resume resolves before playback.
         }
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
-        
+
         setIsSpinning(true);
         setIsSpinInProgress(true);
         if (onSpinStart) {
             onSpinStart({ source: 'wheel' });
         }
-        playWheelSpinStart();
+        if (toneReady) { playWheelSpinStart(); } // RELIABILITY: only fire spin start audio when Tone is ready.
 
         failsafeRef.current = setTimeout(() => {
             if (animationFrameRef.current) {
@@ -963,8 +925,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
                 wheelCanvasRef.current.style.transform = `rotate(${targetAngle}deg)`;
             }
 
-            playWheelTick();
-            setTimeout(() => playWheelTick(), 80);
+            if (toneReady) { playWheelTick(); } // RELIABILITY: guard tick playback behind Tone readiness.
+            if (toneReady) { setTimeout(() => { if (toneReady) { playWheelTick(); } }, 80); } // RELIABILITY: schedule secondary tick only when audio is ready.
 
             setTimeout(() => {
                 if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
@@ -1000,7 +962,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
             const TICK_DEGREES = 360 / CATEGORIES.length / 2;
             if (currentAngle - lastTickAngle >= TICK_DEGREES) {
-                playWheelTick();
+                if (toneReady) { playWheelTick(); } // RELIABILITY: gate tick sound during animation by Tone readiness.
                 lastTickAngle += TICK_DEGREES;
             }
 
@@ -1465,10 +1427,12 @@ const getInitialSettings = () => {
         reducedMotion: false,
     };
     try {
-        const stored = localStorage.getItem('settings');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            return { ...defaults, ...parsed };
+        if (typeof localStorage !== 'undefined') { // RELIABILITY: Guard settings access for non-browser environments.
+            const stored = localStorage.getItem('settings'); // RELIABILITY: Retrieve persisted settings when available.
+            if (stored) { // RELIABILITY: Only parse when serialized settings exist.
+                const parsed = JSON.parse(stored); // RELIABILITY: Parse stored configuration safely.
+                return { ...defaults, ...parsed }; // RELIABILITY: Merge persisted settings with defaults.
+            }
         }
     } catch (e) {
         console.warn("Could not parse settings, using defaults.", e);
@@ -1561,10 +1525,57 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
-    // RELIABILITY: Capture prompt store lazily once App is evaluating.
-    const dbStore = useMemo(() => getDbStore(), []);
-    // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
-    const audioEngine = useMemo(() => getAudioEngineInstance(), []);
+    const dbStore = useMemo(() => getDbStore(), []); // RELIABILITY: Capture prompt store lazily once App is evaluating.
+    const audioEngine = useMemo(() => getAudioEngineInstance(), []); // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
+    const legacyPromptSnapshotRef = useRef(null); // RELIABILITY: Track legacy prompt payloads across asynchronous migrations.
+
+    useEffect(() => { // RELIABILITY: defer Tone and migration setup until after mount
+        if (typeof window === 'undefined') { // RELIABILITY: skip browser-only wiring during SSR
+            return undefined; // RELIABILITY: ensure cleanup contract when no window exists
+        }
+
+        if (!window.Tone) { // RELIABILITY: safely expose Tone only after gesture
+            window.Tone = Tone; // RELIABILITY: wire Tone namespace lazily on first mount
+        }
+
+        try { // RELIABILITY: guard versioned migrations against storage failures
+            const APP_VERSION = '1.3.0'; // RELIABILITY: version migration marker for prompt persistence
+            let storedVersion = null; // RELIABILITY: default stored version when storage unavailable
+            if (typeof localStorage !== 'undefined') { // RELIABILITY: confirm localStorage before access
+                storedVersion = localStorage.getItem('app_version'); // RELIABILITY: inspect stored app version lazily
+            }
+            if (storedVersion !== APP_VERSION && typeof localStorage !== 'undefined') { // RELIABILITY: run migration only when versions differ and storage exists
+                const storage = localStorage; // RELIABILITY: alias storage handle for clarity
+                const keep = new Set(['app_version', 'settings', 'lastError', 'volume', 'musicVolume', 'sfxVolume', 'theme']); // RELIABILITY: preserve allowlisted keys during migration
+                const legacyPrompts = storage.getItem('prompts'); // RELIABILITY: capture prompts prior to cleanup
+                const toDelete = []; // RELIABILITY: stage disallowed keys for removal post-iteration
+                for (let i = 0; i < storage.length; i++) { // RELIABILITY: iterate keys without mutating storage mid-loop
+                    const key = storage.key(i); // RELIABILITY: read key safely from storage namespace
+                    if (key && !keep.has(key)) { // RELIABILITY: validate key presence before queueing deletion
+                        toDelete.push(key); // RELIABILITY: queue stale key for removal to avoid iterator invalidation
+                    }
+                }
+                toDelete.forEach((key) => storage.removeItem(key)); // RELIABILITY: purge disallowed keys after enumeration completes
+                storage.setItem('app_version', APP_VERSION); // RELIABILITY: persist updated app version marker
+                if (legacyPrompts) { // RELIABILITY: ensure legacy prompts survive migration
+                    storage.setItem('prompts', legacyPrompts); // RELIABILITY: restore preserved prompt payloads post-wipe
+                }
+                legacyPromptSnapshotRef.current = legacyPrompts; // RELIABILITY: retain migrated prompts for async IndexedDB seeding
+            }
+        } catch (e) { // RELIABILITY: gracefully handle storage access errors
+            console.warn('[Reliability] localStorage unavailable:', e); // RELIABILITY: emit diagnostics for migration guard failures
+        }
+
+        const handleResize = () => { // RELIABILITY: attach resize listener safely
+            if (typeof document === 'undefined' || !document.body?.style) { // RELIABILITY: guard DOM availability before mutation
+                return; // RELIABILITY: bail when running without document context
+            }
+            document.body.style.setProperty('--vh', `${window.innerHeight * 0.01}px`); // RELIABILITY: update viewport unit custom property lazily
+        };
+        handleResize(); // RELIABILITY: initialize viewport sizing token immediately after mount
+        window.addEventListener('resize', handleResize); // RELIABILITY: respond to viewport changes during runtime
+        return () => window.removeEventListener('resize', handleResize); // RELIABILITY: cleanup resize listener on unmount
+    }, []); // RELIABILITY: execute Tone and migration bootstrap once after mount.
     // RELIABILITY: Defer browser-only error listeners until after mount.
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -1602,19 +1613,21 @@ function App() {
         silenceToneErrors();
     }, []);
 
-    useEffect(() => {
-        // RELIABILITY: migrate legacy localStorage prompts to IndexedDB
-        (async () => {
-            const legacy = legacyPromptSnapshot ?? localStorage.getItem('prompts');
-            if (legacy) {
-                try {
-                    const parsed = JSON.parse(legacy);
-                    await dbStore.setPrompt('prompts', parsed);
-                    localStorage.removeItem('prompts');
-                } catch (err) {
-                    // RELIABILITY: expose migration failures for debugging.
-                    console.warn('[Reliability] Failed to migrate legacy prompts', err);
+    useEffect(() => { // RELIABILITY: migrate legacy localStorage prompts to IndexedDB lazily
+        (async () => { // RELIABILITY: wrap in async IIFE to retain synchronous effect semantics
+            const storedLegacy = legacyPromptSnapshotRef.current ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('prompts') : null); // RELIABILITY: capture legacy payload without assuming storage availability
+            if (!storedLegacy) { // RELIABILITY: exit early when no legacy prompts to migrate
+                return; // RELIABILITY: avoid unnecessary IndexedDB operations when nothing to migrate
+            }
+            try { // RELIABILITY: guard JSON parsing and IndexedDB writes
+                const parsed = JSON.parse(storedLegacy); // RELIABILITY: parse legacy prompts safely
+                await dbStore.setPrompt('prompts', parsed); // RELIABILITY: persist legacy prompts into IndexedDB store
+                if (typeof localStorage !== 'undefined') { // RELIABILITY: ensure localStorage exists before mutation
+                    localStorage.removeItem('prompts'); // RELIABILITY: clear migrated prompt payload from legacy storage
                 }
+                legacyPromptSnapshotRef.current = null; // RELIABILITY: reset migration snapshot after successful transfer
+            } catch (err) { // RELIABILITY: expose migration failures for debugging
+                console.warn('[Reliability] Failed to migrate legacy prompts', err); // RELIABILITY: log migration error for observability
             }
         })();
     }, [dbStore]);
@@ -1696,8 +1709,7 @@ function App() {
             return undefined;
         }
         const resumeAudioContext = async () => {
-            // RELIABILITY: Ensure audio context resumes fully before clearing unlock listener.
-            await resumeAudioOnGesture();
+            if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); } // RELIABILITY: Ensure audio context resumes only when Tone is available.
         };
         const attachUnlockListener = () => {
             document.removeEventListener('click', resumeAudioContext);
@@ -1743,18 +1755,17 @@ function App() {
                 volumes: settings,
                 reducedMotion: prefersReducedMotion,
             };
-            localStorage.setItem('settings', JSON.stringify(settingsToSave));
+            if (typeof localStorage !== 'undefined') { localStorage.setItem('settings', JSON.stringify(settingsToSave)); } // RELIABILITY: Persist settings only when storage exists.
         } catch (e) {
             console.error("Failed to save settings to localStorage", e);
         }
     }, [currentTheme, settings, prefersReducedMotion]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') { return undefined; } // RELIABILITY: Skip reduced-motion listener outside browsers.
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
         const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
-        if (localStorage.getItem('settings') === null) {
-            handleChange();
-        }
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('settings') === null) { handleChange(); } // RELIABILITY: Initialize preference when storage lacks explicit value.
         mediaQuery.addEventListener('change', handleChange);
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
@@ -1831,11 +1842,12 @@ function App() {
         setModalState({ type, data });
       }, [setModalState]);
 
-    useEffect(() => { 
-        if (window.Tone) { 
-            setScriptLoadState('loaded'); 
-            return; 
-        } 
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') { return undefined; } // RELIABILITY: Skip Tone script injection in non-browser contexts.
+        if (window.Tone) {
+            setScriptLoadState('loaded');
+            return undefined;
+        }
         const script = document.createElement('script');
         script.src = "https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js";
         script.async = true;
@@ -1845,14 +1857,13 @@ function App() {
         script.onerror = () => setScriptLoadState('error');
         document.body.appendChild(script);
         return () => { if (script.parentNode) script.parentNode.removeChild(script); };
-    }, []);
+    }, []); // RELIABILITY: install Tone script loader once per component lifecycle.
 
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
             // RELIABILITY: Ensure audio context resumes before playing modal SFX.
             (async () => {
-                await resumeAudioOnGesture();
-                audioEngine.playModalOpen();
+                if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); audioEngine.playModalOpen(); } // RELIABILITY: Guard modal audio playback behind Tone availability.
             })();
         }
     // RELIABILITY: Include deferred audio engine to avoid stale reference after lazy init.
@@ -1957,12 +1968,12 @@ function App() {
         setIsUnlockingAudio(true);
     
         const attemptAudioInit = async () => {
-            if (!window.Tone || !window.Tone.context) {
-                setScriptLoadState('error');
-                return false;
+            if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
+                setScriptLoadState('error'); // RELIABILITY: Surface loading issues when Tone is unavailable.
+                return false; // RELIABILITY: Abort initialization when Tone context missing.
             }
             try {
-                await resumeAudioOnGesture();
+                if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); } // RELIABILITY: Resume audio context only when Tone exists.
             } catch (e) {
                 console.error("Audio unlock failed:", e);
                 return false;
