@@ -16,13 +16,12 @@ const APP_VERSION = '1.3.0';
 // RELIABILITY: Preserve legacy prompt payloads across version resets.
 let legacyPromptSnapshot = null;
 try {
-    const storedVersion = localStorage.getItem('app_version');
-    if (storedVersion !== APP_VERSION) {
-        legacyPromptSnapshot = localStorage.getItem('prompts');
-        localStorage.clear();
-        localStorage.setItem('app_version', APP_VERSION);
-        if (legacyPromptSnapshot) {
-            localStorage.setItem('prompts', legacyPromptSnapshot);
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const storage = window.localStorage;
+        const storedVersion = storage.getItem('app_version');
+        if (storedVersion !== APP_VERSION) {
+            legacyPromptSnapshot = storage.getItem('prompts');
+            storage.setItem('app_version', APP_VERSION);
         }
     }
 } catch (err) {

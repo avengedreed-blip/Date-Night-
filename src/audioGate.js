@@ -1,46 +1,67 @@
+// RELIABILITY: module-level audio unlock tracker to manage suppression scope
+let audioUnlocked = false;
 // RELIABILITY: unified Tone.js audio safety + gesture unlock system
 export const attachAudioGestureListeners = () => {
   const resumeAudio = async () => {
     try {
       const Tone = window.Tone;
-      if (Tone && Tone.context && Tone.context.state === 'suspended') {
-        await Tone.start();
-        console.info('[Reliability] Audio context resumed after gesture');
+      if (Tone && Tone.context) {
+        if (Tone.context.state !== 'running') {
+          await Tone.start();
+        }
+        if (Tone.context.state === 'running') {
+          audioUnlocked = true;
+          console.info('[Reliability] Audio context resumed after gesture');
+        }
       }
     } catch (err) {
       console.warn('[Reliability] Tone resume failed:', err);
     }
-    // remove listeners after first success attempt
-    window.removeEventListener('pointerdown', resumeAudio, true);
-    window.removeEventListener('touchstart', resumeAudio, true);
-    window.removeEventListener('click', resumeAudio, true);
+    // RELIABILITY: remove listeners only once audio is confirmed unlocked
+    if (audioUnlocked) {
+      window.removeEventListener('pointerdown', resumeAudio, true);
+      window.removeEventListener('touchstart', resumeAudio, true);
+      window.removeEventListener('click', resumeAudio, true);
+    }
   };
 
-  // listen for any user gesture to unlock audio
+  // RELIABILITY: listen for any user gesture to unlock audio
   window.addEventListener('pointerdown', resumeAudio, true);
   window.addEventListener('touchstart', resumeAudio, true);
   window.addEventListener('click', resumeAudio, true);
 };
 
-// RELIABILITY: global suppression of unhandled audio promise rejections
+// RELIABILITY: targeted suppression only for autoplay policy rejections pre-gesture
 export const silenceToneErrors = () => {
-  // catch Tone.js internal rejections that would otherwise bubble to React
   window.addEventListener('unhandledrejection', (event) => {
-    const msg = event.reason?.toString?.() || '';
-    if (msg.includes('AudioContext') || msg.includes('Tone')) {
-      console.warn('[Reliability] Suppressed Tone.js rejection:', msg);
-      event.preventDefault(); // prevent React boundary from catching it
-    }
-  });
-
-  // optional: catch direct runtime errors from Tone.js
-  window.addEventListener('error', (event) => {
-    const msg = event.message || '';
-    if (msg.includes('AudioContext') || msg.includes('Tone')) {
-      console.warn('[Reliability] Suppressed Tone.js runtime error:', msg);
+    const msg = String(event.reason || '');
+    const isAutoplay = msg.includes('AudioContext') || msg.includes('NotAllowedError');
+    if (!audioUnlocked && isAutoplay) {
+      console.warn('[Reliability] Suppressed pre-gesture audio rejection:', msg);
       event.preventDefault();
+      return;
+    }
+    if (audioUnlocked && msg.includes('Tone')) {
+      console.error('[Reliability] Surfaced Tone.js rejection:', event.reason);
     }
   });
+};
+
+// RELIABILITY: exposed recovery helper to re-attempt context start when errors surface
+export const recoverAudio = async () => {
+  try {
+    if (window.Tone?.context?.state !== 'running') {
+      await window.Tone.start();
+    }
+    if (window.Tone?.context?.state === 'running') {
+      audioUnlocked = true;
+    }
+    console.info('[Reliability] Audio recover attempted');
+    return true;
+  } catch (e) {
+    console.error('[Reliability] Audio recover failed:', e);
+    return false;
+  }
 };
 
 // RELIABILITY: manual safeguard for explicit context resume if needed elsewhere
