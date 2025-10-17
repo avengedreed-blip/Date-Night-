@@ -6,7 +6,8 @@ console.log('[APP] App.jsx module loading...');
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 // RELIABILITY: IndexedDB prompt storage helpers.
-import { dbStore } from './storage';
+// RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
+import { getDbStore } from './storage';
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 
 // Ensure Tone.js is globally available
@@ -447,6 +448,8 @@ const useLocalStoragePrompts = () => {
     const [prompts, setPrompts] = useState(() => cloneDefaultPrompts());
     // RELIABILITY: Track async prompt hydration status.
     const [isPromptsLoading, setIsPromptsLoading] = useState(true);
+    // RELIABILITY: Acquire prompt store lazily to avoid module evaluation races.
+    const dbStore = useMemo(() => getDbStore(), []);
 
     // RELIABILITY: hydrate prompts from IndexedDB store on mount.
     useEffect(() => {
@@ -495,7 +498,7 @@ const useLocalStoragePrompts = () => {
         return () => {
             isActive = false;
         };
-    }, []);
+    }, [dbStore]);
 
     // RELIABILITY: Keep prompts persisted when mutated.
     const updatePrompts = (newPrompts) => {
@@ -1846,6 +1849,8 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
+    // RELIABILITY: Capture prompt store lazily once App is evaluating.
+    const dbStore = useMemo(() => getDbStore(), []);
 
     useEffect(() => {
         // DIAGNOSTIC: confirm primary App effect mounted
@@ -1870,7 +1875,7 @@ function App() {
                 }
             }
         })();
-    }, []);
+    }, [dbStore]);
 
     // Use the new prompt queue hook
     const { modalState, setModalState, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
