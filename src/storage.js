@@ -1,5 +1,11 @@
 // RELIABILITY: IndexedDB-based prompt persistence
-// RELIABILITY: Re-export prompt store from neutral core to avoid temporal dead zones.
-export { promptStore as dbStore } from './utils/promptStoreCore.js';
+import { createPromptStore, getPromptStore } from './utils/promptStoreCore.js';
+
+// RELIABILITY: Provide lazy getter so consumers defer prompt store access until runtime.
+export const getDbStore = () => getPromptStore();
+
+// RELIABILITY: Maintain legacy singleton export for existing import sites.
+export const dbStore = getPromptStore();
+
 // RELIABILITY: Surface factory for isolated store instances when needed.
-export { createPromptStore } from './utils/promptStoreCore.js';
+export { createPromptStore };
