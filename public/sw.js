@@ -1,11 +1,17 @@
 // RELIABILITY: simple offline cache; avoids blocked Workbox import
 const CACHE_VERSION = 'v1.1.0';
-const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/favicon.ico', '/icon-192.png', '/icon-512.png'];
+// RELIABILITY: Removed /favicon.ico to prevent install rejection on missing asset
+const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   // RELIABILITY: pre-cache core shell assets for offline bootstrap.
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(CORE_ASSETS))
+    caches.open(CACHE_VERSION).then((cache) =>
+      cache.addAll(CORE_ASSETS).catch(err => {
+        // RELIABILITY: log but do not reject install when optional asset is missing.
+        console.warn('[Reliability] Cache preload failed:', err);
+      })
+    )
   );
   self.skipWaiting();
 });

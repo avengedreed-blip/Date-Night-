@@ -9,8 +9,8 @@ try {
 } catch {}
 
 export default defineConfig({
-  // RELIABILITY: ensure SW + manifest load from root scope on Vercel
-  base: "/",
+  // RELIABILITY: Use root-relative base to keep PWA asset URLs consistent in all environments
+  base: "./",
   plugins: [react()],
   publicDir: "public",
   // RELIABILITY: Ensure idb-keyval imports resolve to local shim for offline builds.
