@@ -14,9 +14,6 @@ import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 // RELIABILITY: Lazy audio core accessor prevents App.jsx import cycles.
 import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
 
-// Ensure Tone.js is globally available
-import * as Tone from "tone"; // RELIABILITY: Tone namespace is imported without triggering browser side-effects during module load.
-
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
 const safeUUID = () => {
   const api = globalThis.crypto;
@@ -44,7 +41,67 @@ if (typeof structuredClone !== "function") {
 }
 
 // RELIABILITY: Lazy audio engine accessor exposed for runtime consumers.
-const getAudioEngineInstance = () => getAudioEngine();
+// RELIABILITY: Provide synchronous placeholder that upgrades once the async audio engine resolves.
+const getAudioEngineInstance = () => {
+  // RELIABILITY: holder caches the resolved engine for downstream delegates.
+  const engineHolder = { current: null };
+  // RELIABILITY: helper ensures the Tone-backed engine loads only once per component lifecycle.
+  const ensureEngine = async () => {
+    if (engineHolder.current) return engineHolder.current;
+    try {
+      const engine = await getAudioEngine();
+      engineHolder.current = engine;
+      return engineHolder.current;
+    } catch (err) {
+      // RELIABILITY: surface loader failures without interrupting render work
+      console.warn('[Reliability] Failed to load audio engine:', err);
+      return null;
+    }
+  };
+  // RELIABILITY: kick off engine loading immediately to warm caches prior to user gesture.
+  ensureEngine();
+  // RELIABILITY: asynchronous methods that must return promises for compatibility with existing awaiters.
+  const asyncMethods = ['initialize', 'startTheme', 'stopTheme'];
+  // RELIABILITY: synchronous fire-and-forget methods invoked from UI interactions.
+  const syncMethods = [
+    'toggleMute',
+    'setMasterVolume',
+    'setMusicVolume',
+    'setSfxVolume',
+    'playWheelSpinStart',
+    'playWheelTick',
+    'playWheelStopSound',
+    'playModalOpen',
+    'playModalClose',
+    'playCorrect',
+    'playWrong',
+    'playExtremePrompt',
+    'playRefuse',
+    'playUIConfirm',
+  ];
+  // RELIABILITY: placeholder delegates to real engine once available while providing safe fallbacks.
+  const placeholder = {
+    // RELIABILITY: deterministic BPM fallback keeps timing tokens stable pre-initialization.
+    getCurrentBpm: () => (engineHolder.current?.getCurrentBpm ? engineHolder.current.getCurrentBpm() : 85),
+  };
+  // RELIABILITY: wire asynchronous delegates that await engine resolution before invoking.
+  asyncMethods.forEach((method) => {
+    placeholder[method] = async (...args) => {
+      const engine = await ensureEngine();
+      if (!engine || typeof engine[method] !== 'function') return method === 'initialize' ? false : undefined;
+      return engine[method](...args);
+    };
+  });
+  // RELIABILITY: wire synchronous delegates that no-op until the engine becomes available.
+  syncMethods.forEach((method) => {
+    placeholder[method] = (...args) => {
+      const engine = engineHolder.current;
+      if (!engine || typeof engine[method] !== 'function') return undefined;
+      return engine[method](...args);
+    };
+  });
+  return placeholder;
+};
 
 
 // --- DATA & PROMPTS ---
@@ -1531,13 +1588,25 @@ function App() {
     const audioEngine = useMemo(() => getAudioEngineInstance(), []); // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
     const legacyPromptSnapshotRef = useRef(null); // RELIABILITY: Track legacy prompt payloads across asynchronous migrations.
 
+    // RELIABILITY: async init for audio engine after mount
+    useEffect(() => {
+        // RELIABILITY: start asynchronous loader for Tone-backed audio engine
+        (async () => {
+            try {
+                // RELIABILITY: await lazy singleton creation prior to initialization
+                const engine = await getAudioEngine();
+                // RELIABILITY: ensure initialize executes only when available
+                if (engine?.initialize) await engine.initialize();
+            } catch (err) {
+                // RELIABILITY: guard against initialization failures without crashing UI
+                console.warn('[Reliability] Audio engine init failed:', err);
+            }
+        })();
+    }, []);
+
     useEffect(() => { // RELIABILITY: defer Tone and migration setup until after mount
         if (typeof window === 'undefined') { // RELIABILITY: skip browser-only wiring during SSR
             return undefined; // RELIABILITY: ensure cleanup contract when no window exists
-        }
-
-        if (!window.Tone) { // RELIABILITY: safely expose Tone only after gesture
-            window.Tone = Tone; // RELIABILITY: wire Tone namespace lazily on first mount
         }
 
         try { // RELIABILITY: guard versioned migrations against storage failures
