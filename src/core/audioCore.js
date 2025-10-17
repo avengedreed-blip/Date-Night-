@@ -3,8 +3,12 @@ try { console.log('[INIT]', 'core/audioCore.js'); } catch {}
 // RELIABILITY: Centralized audio engine core extracted from App.jsx to break TDZ cycles.
 // RELIABILITY: defer Tone import until runtime to prevent TDZ and premature AudioContext creation
 let ToneNS;
-// RELIABILITY: runtime loader resolves Tone namespace lazily and binds it to window
-const loadTone = async () => {
+// RELIABILITY: Hardening — confirm Tone not yet on window during import
+if (typeof window !== 'undefined' && window.Tone === undefined) {
+  console.log('[Reliability] Waiting for Tone runtime load...');
+}
+// RELIABILITY: Lazy async Tone loader (unchanged from previous fix)
+export const loadTone = async () => {
   if (!ToneNS) {
     const mod = await import('tone');
     ToneNS = mod;

@@ -10,8 +10,9 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, Motio
 // RELIABILITY: IndexedDB prompt storage helpers.
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
 import { getDbStore } from './storage';
+// RELIABILITY: load gesture logic first (inert)
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
-// RELIABILITY: Lazy audio core accessor prevents App.jsx import cycles.
+// RELIABILITY: then load core engine (lazy async Tone)
 import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
 
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
@@ -1676,12 +1677,18 @@ function App() {
         };
     }, []);
 
+    // RELIABILITY: async init for audio engine after mount
     useEffect(() => {
-        // DIAGNOSTIC: confirm primary App effect mounted
-        console.log('[APP] useEffect mounted');
-        // RELIABILITY: establish gesture unlock and error suppression before any audio runs
         attachAudioGestureListeners();
         silenceToneErrors();
+        (async () => {
+            try {
+                const engine = await getAudioEngine();
+                if (engine?.initialize) await engine.initialize();
+            } catch (err) {
+                console.warn('[Reliability] Audio engine init failed:', err);
+            }
+        })();
     }, []);
 
     useEffect(() => { // RELIABILITY: migrate legacy localStorage prompts to IndexedDB lazily
