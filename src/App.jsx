@@ -16,17 +16,33 @@ const APP_VERSION = '1.3.0';
 // RELIABILITY: Preserve legacy prompt payloads across version resets.
 let legacyPromptSnapshot = null;
 try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-        const storage = window.localStorage;
-        const storedVersion = storage.getItem('app_version');
-        if (storedVersion !== APP_VERSION) {
-            legacyPromptSnapshot = storage.getItem('prompts');
-            storage.setItem('app_version', APP_VERSION);
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const storage = window.localStorage;
+    const storedVersion = storage.getItem('app_version');
+    if (storedVersion !== APP_VERSION) {
+      // RELIABILITY: targeted migration to avoid wiping user settings
+      const keep = new Set(['app_version', 'settings', 'lastError', 'volume', 'musicVolume', 'sfxVolume', 'theme']);
+      const legacyPrompts = storage.getItem('prompts');
+      // remove anything not allowlisted
+      const toDelete = [];
+      for (let i = 0; i < storage.length; i++) {
+        const k = storage.key(i);
+        if (!keep.has(k)) {
+          // queue deletions (cannot mutate while iterating)
+          if (k) toDelete.push(k);
         }
+      }
+      // second pass delete
+      toDelete.forEach((k) => storage.removeItem(k));
+
+      storage.setItem('app_version', APP_VERSION);
+      if (legacyPrompts) storage.setItem('prompts', legacyPrompts);
+      legacyPromptSnapshot = legacyPrompts;
     }
+  }
 } catch (err) {
-    // RELIABILITY: Surface guard failures for diagnostics.
-    console.warn('[Reliability] Failed to apply app version guard', err);
+  // RELIABILITY: Surface guard failures for diagnostics.
+  console.warn('[Reliability] Failed to apply app version guard', err);
 }
 
 // RELIABILITY: Centralized gesture-based audio resume helper.
