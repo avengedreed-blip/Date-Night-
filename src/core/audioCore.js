@@ -8,7 +8,7 @@ if (typeof window !== 'undefined' && !window.Tone) {
 
 // RELIABILITY: Shared gesture-based audio resume helper reused across modules.
 export const resumeAudioOnGesture = async () => {
-  if (!window.Tone || !window.Tone.context) return;
+  if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) return;
   if (window.Tone.context.state === 'running') return;
   try {
     await window.Tone.start();

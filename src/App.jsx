@@ -14,7 +14,10 @@ import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
 
 // Ensure Tone.js is globally available
 import * as Tone from "tone";
-if (!window.Tone) window.Tone = Tone;
+// RELIABILITY: Guard Tone namespace wiring to avoid SSR ReferenceErrors.
+if (typeof window !== 'undefined' && !window.Tone) {
+    window.Tone = Tone;
+}
 
 // RELIABILITY: app version migration guard
 const APP_VERSION = '1.3.0';
@@ -67,23 +70,6 @@ const scheduleMicrotask = (fn) => {
   }
   Promise.resolve().then(fn);
 };
-
-// [GeminiFix: ManifestHardening]
-// Non-critical asset error suppression
-window.addEventListener("error", (e) => {
-    if (e.target instanceof HTMLScriptElement || e.target instanceof HTMLLinkElement) {
-        // RELIABILITY: Guard error message string checks before substring evaluation.
-        if (typeof e.message === 'string' && (e.message.includes("manifest") || e.message.includes("favicon"))) {
-      e.preventDefault();
-    }
-  }
-}, true);
-
-// RELIABILITY: lightweight diagnostics logger
-window.addEventListener('error', (e) => {
-  localStorage.setItem('lastError', e.message);
-});
-
 
 // Registry to suppress click immediately after a secret round opens
 const secretPromptOpenAt = { t: 0 };
@@ -933,7 +919,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         }
     }, [drawWheel]);
 
-    const handleSpin = useCallback(() => {
+    const handleSpin = useCallback(async () => {
         const now = Date.now();
         if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
             return;
@@ -942,8 +928,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         spinLock.current = true; // Acquire lock
 
         if (window?.Tone?.context?.state === 'suspended') {
-            // RELIABILITY: Resume audio on direct spin gesture after background suspension.
-            resumeAudioOnGesture();
+            // RELIABILITY: Await gesture resume to avoid playing audio before context unlock.
+            await resumeAudioOnGesture();
         }
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
@@ -1579,6 +1565,34 @@ function App() {
     const dbStore = useMemo(() => getDbStore(), []);
     // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
     const audioEngine = useMemo(() => getAudioEngineInstance(), []);
+    // RELIABILITY: Defer browser-only error listeners until after mount.
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return undefined;
+        }
+        const assetErrorHandler = (e) => {
+            if (e.target instanceof HTMLScriptElement || e.target instanceof HTMLLinkElement) {
+                const message = typeof e.message === 'string' ? e.message : '';
+                if (message && (message.includes('manifest') || message.includes('favicon'))) {
+                    e.preventDefault();
+                }
+            }
+        };
+        const diagnosticsLogger = (e) => {
+            if (typeof window.localStorage === 'undefined') {
+                return;
+            }
+            try {
+                window.localStorage.setItem('lastError', e.message || '');
+            } catch {}
+        };
+        window.addEventListener('error', assetErrorHandler, true);
+        window.addEventListener('error', diagnosticsLogger);
+        return () => {
+            window.removeEventListener('error', assetErrorHandler, true);
+            window.removeEventListener('error', diagnosticsLogger);
+        };
+    }, []);
 
     useEffect(() => {
         // DIAGNOSTIC: confirm primary App effect mounted
@@ -1678,8 +1692,12 @@ function App() {
 
     // AudioContext autoplay warning fix
     useEffect(() => {
-        const resumeAudioContext = () => {
-            resumeAudioOnGesture();
+        if (typeof document === 'undefined') {
+            return undefined;
+        }
+        const resumeAudioContext = async () => {
+            // RELIABILITY: Ensure audio context resumes fully before clearing unlock listener.
+            await resumeAudioOnGesture();
         };
         const attachUnlockListener = () => {
             document.removeEventListener('click', resumeAudioContext);
@@ -1690,7 +1708,7 @@ function App() {
 
         const handleVisibility = () => {
             if (document.hidden) return;
-            if (window?.Tone?.context?.state === 'suspended') {
+            if (typeof window !== 'undefined' && window.Tone?.context?.state === 'suspended') {
                 // RELIABILITY: Re-arm gesture listener after background resume.
                 attachUnlockListener();
             }
@@ -1831,8 +1849,11 @@ function App() {
 
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
-            resumeAudioOnGesture();
-            audioEngine.playModalOpen();
+            // RELIABILITY: Ensure audio context resumes before playing modal SFX.
+            (async () => {
+                await resumeAudioOnGesture();
+                audioEngine.playModalOpen();
+            })();
         }
     // RELIABILITY: Include deferred audio engine to avoid stale reference after lazy init.
     }, [modalState.type, audioEngine]);

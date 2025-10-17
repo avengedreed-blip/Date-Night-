@@ -1,6 +1,20 @@
 // RELIABILITY: Core prompt persistence helpers extracted to eliminate circular evaluation risk.
 import { get, set, del, clear, keys } from 'idb-keyval';
 
+// RELIABILITY: Shared guard helpers for browser storage fallbacks.
+const hasBrowserStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const writeBrowserFallback = (key, value) => {
+  if (!hasBrowserStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    console.warn('[Reliability] LocalStorage fallback write failed:', err);
+  }
+};
+
 // RELIABILITY: Hoisted factory keeps prompt store creation reusable across modules.
 export function createPromptStore() {
   return {
@@ -13,7 +27,7 @@ export function createPromptStore() {
       } catch (err) {
         // RELIABILITY: Preserve legacy fallback semantics when IndexedDB fails.
         console.warn('[Reliability] IndexedDB write failed, fallback to memory:', err);
-        localStorage.setItem(key, JSON.stringify(value));
+        writeBrowserFallback(key, value);
       }
     },
     async removePrompt(key) {
@@ -37,5 +51,14 @@ export const getPromptStore = () => {
   return promptStoreSingleton;
 };
 
-// RELIABILITY: maintain existing singleton export for legacy callers.
-export const promptStore = getPromptStore();
+// RELIABILITY: maintain existing singleton export for legacy callers without eager instantiation.
+export const promptStore = new Proxy({}, {
+  get(_target, prop) {
+    const store = getPromptStore();
+    const value = store[prop];
+    if (typeof value === 'function') {
+      return value.bind(store);
+    }
+    return value;
+  }
+});
