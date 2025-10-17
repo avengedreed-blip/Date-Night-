@@ -663,10 +663,14 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
     const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
-        /* RELIABILITY: use floor with half-slice offset to align visual and logical categories */ const sliceAngle = 360 / CATEGORIES.length;
-        /* RELIABILITY: normalize rotation into [0, 360) range for consistent indexing */ const normalized = ((-rotation + 90) % 360 + 360) % 360;
-        /* RELIABILITY: offset by half a slice to keep category boundaries centered within wedges */ const adjusted = (normalized + sliceAngle / 2) % 360;
-        /* RELIABILITY: floor adjusted angle to derive stable slice index */ const sliceIndex = Math.floor(adjusted / sliceAngle);
+        // RELIABILITY: compute winner category based on pointer alignment (bias slightly negative)
+        const sliceAngle = 360 / CATEGORIES.length;
+        // RELIABILITY: normalize rotation into [0, 360) range for consistent indexing
+        const normalized = ((-rotation + 90) % 360 + 360) % 360;
+        // RELIABILITY: apply slight negative bias to center pointer alignment visually and logically
+        const adjusted = (normalized - sliceAngle / 6 + 360) % 360;
+        // RELIABILITY: use floor to avoid boundary bleed into neighboring slices
+        const sliceIndex = Math.floor(adjusted / sliceAngle);
         // RELIABILITY: capture raw winner before normalization
         const rawWinner = CATEGORIES[sliceIndex];
         // RELIABILITY: guard undefined winner/payload to prevent .toLowerCase() crash
@@ -1569,17 +1573,31 @@ function usePromptQueue() {
         scheduleMicrotask(() => dispatchQueue({ type: 'DEQUEUE' }));
     }, [queueState.active, queueState.queue.length, queueState.deliveryLock, modalState?.type]);
 
-    /* RELIABILITY: nudge queued prompt delivery if timing stalls */ useEffect(() => {
-        /* RELIABILITY: skip when queue active, empty, locked, or modal already showing */ if (queueState.active || !queueState.queue.length || queueState.deliveryLock) return;
-        /* RELIABILITY: abort when modal currently displayed to avoid duplicate triggers */ if (modalState?.type) return;
-        /* RELIABILITY: schedule delayed kick to re-lock and dequeue if reducer stalls */ const t = setTimeout(() => {
-            /* RELIABILITY: double-check state before nudging reducer */ if (!queueState.active && queueState.queue.length && !queueState.deliveryLock && !modalState?.type) {
-                /* RELIABILITY: reapply lock before dispatching dequeue to maintain ordering */ dispatchQueue({ type: 'LOCK' });
-                /* RELIABILITY: microtask ensures dequeue follows lock even under batching */ scheduleMicrotask(() => dispatchQueue({ type: 'DEQUEUE' }));
+    // RELIABILITY: dual-timer nudge to guarantee prompt queue progression
+    useEffect(() => {
+        if (queueState.active || !queueState.queue.length || queueState.deliveryLock) return;
+        if (modalState?.type) return;
+
+        const nudge = () => {
+            // RELIABILITY: double-check that we’re still idle and a prompt is waiting
+            if (
+                !queueState.active &&
+                queueState.queue.length &&
+                !queueState.deliveryLock &&
+                !modalState?.type
+            ) {
+                dispatchQueue({ type: 'LOCK' });
+                scheduleMicrotask(() => dispatchQueue({ type: 'DEQUEUE' }));
             }
-        }, 200);
-        /* RELIABILITY: cleanup timer if conditions change before firing */ return () => clearTimeout(t);
-    /* RELIABILITY: dependencies ensure nudge reacts to queue and modal state */ }, [queueState.active, queueState.queue.length, queueState.deliveryLock, modalState?.type]);
+        };
+
+        const t1 = setTimeout(nudge, 200);  // short-term recovery
+        const t2 = setTimeout(nudge, 600);  // fallback recovery
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+        };
+    }, [queueState.active, queueState.queue.length, queueState.deliveryLock, modalState?.type]);
 
     useEffect(() => {
         if (!queueState.active) return;
@@ -2245,7 +2263,13 @@ function App() {
         }
         // RELIABILITY: safe normalization of category string
         const normalizedCategory = category.toLowerCase();
-        /* DEBUG: verify category mapping during QA */ console.log('[DEBUG] Winner category:', normalizedCategory, 'First prompt example:', prompts?.[normalizedCategory]?.normal?.[0]);
+        // DEBUG: verify category-to-prompt mapping
+        console.log(
+            '[DEBUG] Winner category:',
+            normalizedCategory,
+            'First prompt sample:',
+            prompts?.[normalizedCategory]?.normal?.[0]
+        );
         // DIAGNOSTIC: ensure prompts payload is available before destructuring
         if (!prompts || typeof prompts !== 'object') {
             console.warn('[DIAGNOSTIC][App.jsx][handleSpinFinish] Prompts state unavailable:', prompts);
