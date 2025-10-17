@@ -1,12 +1,17 @@
 // TRACE: module load marker
 try { console.log('[INIT]', 'core/audioCore.js'); } catch {}
 // RELIABILITY: Centralized audio engine core extracted from App.jsx to break TDZ cycles.
-import * as Tone from 'tone';
-
-// RELIABILITY: Guarantee Tone namespace is present on window before consumers access audio APIs.
-if (typeof window !== 'undefined' && !window.Tone) {
-  window.Tone = Tone;
-}
+// RELIABILITY: defer Tone import until runtime to prevent TDZ and premature AudioContext creation
+let ToneNS;
+// RELIABILITY: runtime loader resolves Tone namespace lazily and binds it to window
+const loadTone = async () => {
+  if (!ToneNS) {
+    const mod = await import('tone');
+    ToneNS = mod;
+    if (typeof window !== 'undefined' && !window.Tone) window.Tone = ToneNS;
+  }
+  return ToneNS;
+};
 
 // RELIABILITY: Shared gesture-based audio resume helper reused across modules.
 export const resumeAudioOnGesture = async () => {
@@ -391,9 +396,10 @@ const createAudioEngine = () => {
   };
 };
 
-// RELIABILITY: Exported getter returns the memoized audio engine instance.
-export const getAudioEngine = () => {
+// RELIABILITY: Exported getter awaits Tone runtime before constructing the audio engine singleton.
+export const getAudioEngine = async () => {
   if (!audioEngineSingleton) {
+    await loadTone();
     audioEngineSingleton = createAudioEngine();
   }
   return audioEngineSingleton;
