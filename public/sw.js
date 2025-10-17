@@ -47,13 +47,14 @@ self.addEventListener('message', (event) => {
 // RELIABILITY: hardened fetch handler with analytics ignore + safe fallbacks
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') return;
+  if (!request || request.method !== 'GET') return;
 
-  const url = request.url;
+  // RELIABILITY: safely derive URL string
+  const url = typeof request.url === 'string' ? request.url : '';
 
-  // RELIABILITY: skip analytics/live/feedback URLs entirely
-  if (url.includes('vercel.live') || url.includes('feedback.js')) {
-    return; // don't intercept
+  if (url && (url.includes('vercel.live') || url.includes('feedback.js'))) {
+    // RELIABILITY: skip analytics/live URLs safely
+    return;
   }
 
   const isDocOrJs =
