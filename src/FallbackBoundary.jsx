@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'FallbackBoundary.jsx'); } catch {}
 // RELIABILITY: top-level React error boundary to prevent black-screen crashes
 import React from 'react';
 

@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'main.jsx'); } catch {}
 // RELIABILITY: Ensure bootstrap only executes in browser environments.
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // DIAGNOSTIC: bootstrap trace
