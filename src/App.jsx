@@ -1512,11 +1512,18 @@ const PlayerNameScreen = ({ onStart, activeVisualTheme }) => {
     const [p2, setP2] = useState('');
     return (
         <OnboardingScreen activeVisualTheme={activeVisualTheme}>
-             <div className="onboarding-content-block">
+            <div className="onboarding-content-block">
                 <h2 className="text-4xl font-bold">Who's Playing?</h2>
-                <form onSubmit={(e) => { e.preventDefault(); onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
-                    <div className="metallic-input-wrapper"><input type="text" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="Player 1 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/></div>
-                    <div className="metallic-input-wrapper"><input type="text" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="Player 2 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/></div>
+                {/* // QA: add accessible identifiers for onboarding form */}
+                <form id="player-name-form" name="player-name-form" onSubmit={(e) => { e.preventDefault(); onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
+                    <div className="metallic-input-wrapper">
+                        {/* // QA: ensure player one field has identifiers */}
+                        <input id="player-one-name" name="player-one-name" type="text" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="Player 1 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/>
+                    </div>
+                    <div className="metallic-input-wrapper">
+                        {/* // QA: ensure player two field has identifiers */}
+                        <input id="player-two-name" name="player-two-name" type="text" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="Player 2 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/>
+                    </div>
                     <motion.button type="submit" className="btn btn--primary text-xl px-10 py-4 mt-4" whileTap={{ scale: 0.95 }}>Start Game</motion.button>
                 </form>
             </div>
