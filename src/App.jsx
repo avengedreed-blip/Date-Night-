@@ -1,3 +1,5 @@
+// DIAGNOSTIC: module load marker
+console.log('[APP] App.jsx module loading...');
 /* --- PROMPT RELIABILITY FIX --- */
 /* --- SECRET ROUND TIMING PATCH --- */
 /* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
@@ -1811,11 +1813,15 @@ function usePromptQueue() {
 }
 
 function App() {
+    // DIAGNOSTIC: log render cycle entry for App component
+    console.log('[APP] Rendering main App component...');
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
 
     useEffect(() => {
+        // DIAGNOSTIC: confirm primary App effect mounted
+        console.log('[APP] useEffect mounted');
         // RELIABILITY: establish gesture unlock and error suppression before any audio runs
         attachAudioGestureListeners();
         silenceToneErrors();
