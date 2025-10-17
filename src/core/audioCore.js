@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'core/audioCore.js'); } catch {}
 // RELIABILITY: Centralized audio engine core extracted from App.jsx to break TDZ cycles.
 import * as Tone from 'tone';
 

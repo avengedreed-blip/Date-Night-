@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'internal-idb-keyval.js'); } catch {}
 // RELIABILITY: Local shim replicating idb-keyval primitives via idb.
 import { openDB } from 'idb';
 

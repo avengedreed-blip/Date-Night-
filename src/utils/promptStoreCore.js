@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'utils/promptStoreCore.js'); } catch {}
 // RELIABILITY: Core prompt persistence helpers extracted to eliminate circular evaluation risk.
 import { get, set, del, clear, keys } from 'idb-keyval';
 

@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'App.jsx'); } catch {}
 // DIAGNOSTIC: module load marker
 console.log('[APP] App.jsx module loading...');
 /* --- PROMPT RELIABILITY FIX --- */

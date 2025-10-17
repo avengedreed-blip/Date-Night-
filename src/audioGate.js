@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'audioGate.js'); } catch {}
 // RELIABILITY: module-level audio unlock tracker to manage suppression scope
 let audioUnlocked = false;
 // RELIABILITY: unified Tone.js audio safety + gesture unlock system

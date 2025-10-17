@@ -1,3 +1,5 @@
+// TRACE: module load marker
+try { console.log('[INIT]', 'storage.js'); } catch {}
 import { createPromptStore, getPromptStore } from './utils/promptStoreCore.js'; // RELIABILITY: IndexedDB prompt storage accessor only
 
 export const getDbStore = () => getPromptStore(); // RELIABILITY: expose only the lazy getter
