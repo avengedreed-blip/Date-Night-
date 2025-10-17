@@ -156,16 +156,40 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* Particles above bg, below overlays */
-.particle-canvas,
-.particle-background {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-  z-index: 5;
+/* VISUAL: ensure parallax sits behind everything */
+#parallax-bg {
   position: fixed;
   inset: 0;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 60%, var(--theme-accent) 0%, transparent 80%);
+  opacity: 0.08; /* lowered for particle visibility */
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+
+/* VISUAL: keep ambient glow subtle and transparent */
+#ambient-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(circle at 50% 60%, var(--theme-highlight) 0%, transparent 80%);
+  opacity: 0.04; /* reduced slightly */
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* VISUAL: elevate particle canvas above parallax and glow */
+.particle-canvas,
+.particle-background {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+  opacity: 0.85;
+  pointer-events: none;
+  object-fit: cover;
+  mix-blend-mode: screen;
 }
 
 /* VISUAL: dynamic particle recolor (for potential CSS particle elements) */
@@ -241,37 +265,6 @@ body, #app-content {
 .bg-power-surge {
   background: radial-gradient(circle, rgba(255, 255, 255, .35), rgba(255, 255, 255, 0) 60%);
 }
-
-/* VISUAL: Parallax and Ambient Glow Layers */
-#parallax-bg, #ambient-glow {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-#parallax-bg {
-  z-index: 1; /* Behind main content */
-  background: radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%);
-  opacity: 0.15;
-  transition: transform 0.8s ease-in-out, opacity 0.8s ease-in-out;
-}
-
-#ambient-glow {
-  z-index: 2; /* Above parallax, below content */
-  background: radial-gradient(circle at 50% 50%, var(--theme-highlight) 0%, transparent 70%);
-  opacity: 0.05;
-  mix-blend-mode: screen;
-  animation: ambient-pulse 6s linear infinite;
-}
-
-/* VISUAL: Ambient glow pulse animation */
-@keyframes ambient-pulse {
-  0% { opacity: 0.04; }
-  50% { opacity: 0.08; }
-  100% { opacity: 0.04; }
-}
-
 
 /* --- ONBOARDING CENTERING FIX --- */
 .onboarding-screen-container {
