@@ -2632,12 +2632,61 @@ function App() {
                 <div className={`bg-layer ${activeBg === 1 ? 'opacity-100' : 'opacity-0'} ${prevBackgroundClass}`} />
                 <div className={`bg-layer ${activeBg === 2 ? 'opacity-100' : 'opacity-0'} ${activeBackgroundClass}`} />
                 
-                <ParticleBackground
-                    currentTheme={backgroundTheme}
-                    pulseLevel={pulseLevel}
-                    bpm={audioEngine.getCurrentBpm()}
-                    reducedMotion={prefersReducedMotion}
+                // VISUAL: parallax background layer behind UI - reacts to isSpinning
+                <motion.div
+                    // VISUAL: unique identifier for parallax gradient layer
+                    id="parallax-bg"
+                    // VISUAL: ensure parallax sits beneath all other visual layers
+                    className="fixed inset-0 pointer-events-none z-[-1]"
+                    // VISUAL: establish idle parallax presentation when wheel rests
+                    initial={{ scale: 1, opacity: 0.15 }}
+                    // VISUAL: guard animate binding to prevent undefined isSpinning access
+                    animate={typeof isSpinning !== 'undefined' && isSpinning
+                        ? { scale: 1.1, opacity: 0.3 }
+                        : { scale: 1, opacity: 0.15 }}
+                    // VISUAL: smooth easing for parallax transitions
+                    transition={{ duration: 0.8, ease: 'easeInOut' }}
+                    // VISUAL: apply accent-driven glow with lighten blend
+                    style={{
+                        // VISUAL: accent gradient keeps background theme cohesion
+                        background: 'radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%)',
+                        // VISUAL: lighten blend allows parallax to interact subtly with base background
+                        mixBlendMode: 'lighten'
+                    }}
                 />
+                // VISUAL: ambient glow overlay above parallax but below interactive layers
+                <div
+                    // VISUAL: unique identifier for ambient glow overlay
+                    id="ambient-glow"
+                    // VISUAL: glow remains above parallax while ignoring pointer events
+                    className="fixed inset-0 pointer-events-none z-0"
+                    // VISUAL: maintain highlight-colored glow using CSS variables
+                    style={{
+                        // VISUAL: highlight gradient adds subtle atmospheric sheen
+                        background: 'radial-gradient(circle, var(--theme-highlight) 0%, transparent 70%)',
+                        // VISUAL: slight transparency prevents overwhelming the UI
+                        opacity: 0.06,
+                        // VISUAL: screen blend integrates glow softly with content
+                        mixBlendMode: 'screen'
+                    }}
+                />
+                // VISUAL: ensure particles render above parallax layer
+                <div
+                    // VISUAL: fixed wrapper preserves particle alignment and stacking context
+                    className="fixed inset-0 pointer-events-none z-10"
+                >
+                    // VISUAL: particle background responds to theme and audio pulse
+                    <ParticleBackground
+                        // VISUAL: sync particle hues with active background theme
+                        currentTheme={backgroundTheme}
+                        // VISUAL: drive particle intensity via pulse level
+                        pulseLevel={pulseLevel}
+                        // VISUAL: animate particle timing with current BPM
+                        bpm={audioEngine.getCurrentBpm()}
+                        // VISUAL: respect reduced motion preference for accessibility
+                        reducedMotion={prefersReducedMotion}
+                    />
+                </div>
                 <div className="hdr-glow-overlay" />
                 <Vignette />
                 <NoiseOverlay reducedMotion={prefersReducedMotion} />
@@ -2654,32 +2703,6 @@ function App() {
                 </AnimatePresence>
 
                 <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
-{/* VISUAL: parallax background layer behind UI - reacts to isSpinning */}
-{/* // RELIABILITY: ensure parallax background uses a single transition declaration */}
-{/* // VISUAL: position parallax gradient behind particles with lighten blend */}
-<motion.div
-  id="parallax-bg"
-  className="fixed inset-0 pointer-events-none z-[-1]"
-  initial={{ scale: 1, opacity: 0.15 }}
-  animate={isSpinning ? { scale: 1.1, opacity: 0.3 } : { scale: 1, opacity: 0.15 }}
-  transition={{ duration: 0.8, ease: 'easeInOut' }}
-  style={{
-    background: 'radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%)',
-    mixBlendMode: 'lighten'
-  }}
-/>
-{/* VISUAL: ambient glow overlay above parallax but below content */}
-{/* // VISUAL: ensure ambient glow remains above parallax background */}
-<div
-  id="ambient-glow"
-  className="fixed inset-0 pointer-events-none z-0"
-  style={{
-    background: 'radial-gradient(circle, var(--theme-highlight) 0%, transparent 70%)',
-    opacity: 0.06,
-    mixBlendMode: 'screen'
-  }}
-/>
-
                     {renderContent()}
                 </div>
                 
