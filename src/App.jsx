@@ -255,16 +255,33 @@ const publicApi = {
   },
 
   async startTheme(themeName) {
+    // DIAGNOSTIC: validate requested themeName before attempting to start playback
+    if (typeof themeName !== 'string' || !themeName.trim()) {
+      console.warn('[DIAGNOSTIC][App.jsx][audioEngine.startTheme] Invalid themeName payload:', themeName);
+      return;
+    }
     const Tone = window.Tone;
-    if (!isInitialized || !Tone || !themes[themeName]) return;
+    // DIAGNOSTIC: ensure theme registry is available before dereferencing theme data
+    if (!isInitialized || !Tone || !themes || typeof themes !== 'object' || !themes[themeName]) {
+      console.warn('[DIAGNOSTIC][App.jsx][audioEngine.startTheme] Theme assets unavailable for:', themeName, { isInitialized, hasTone: !!Tone, themeKeys: themes ? Object.keys(themes) : null });
+      return;
+    }
 
     await resumeAudioOnGesture();
-    
+
     // [GeminiFix: ForeverPromiseAudio]
     // Removed early return to allow re-triggering and ensure loops continue.
     // if (activeTheme && activeTheme.name === themeName) return;
 
     const startNewThemeAndFadeIn = () => {
+      if (activeTheme) {
+        // DIAGNOSTIC: guard activeTheme structure before attempting cleanup
+        if (typeof activeTheme !== 'object' || !activeTheme.parts || !Array.isArray(activeTheme.parts)) {
+          console.warn('[DIAGNOSTIC][App.jsx][audioEngine.startTheme] Active theme corrupt before cleanup:', activeTheme);
+          activeTheme = null;
+        }
+      }
+
       if (activeTheme) {
         if (activeTheme.cleanup) activeTheme.cleanup();
         activeTheme.parts.forEach(p => {
@@ -275,7 +292,13 @@ const publicApi = {
 
       activeTheme = themes[themeName];
       activeTheme.name = themeName;
-      
+
+      // DIAGNOSTIC: verify new activeTheme payload before use
+      if (typeof activeTheme !== 'object' || !Array.isArray(activeTheme.parts)) {
+        console.warn('[DIAGNOSTIC][App.jsx][audioEngine.startTheme] Theme payload malformed for:', themeName, activeTheme);
+        return;
+      }
+
       Tone.Transport.bpm.value = activeTheme.bpm;
       if (activeTheme.init) activeTheme.init();
       activeTheme.parts.forEach(p => p.start(0));
@@ -926,6 +949,11 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         }
         // RELIABILITY: safe normalization of winner label
         const winner = rawWinner.toLowerCase();
+        // DIAGNOSTIC: verify winner dispatch target is callable before invoking
+        if (typeof onSpinFinish !== 'function') {
+            console.warn('[DIAGNOSTIC][App.jsx][Wheel.finalizeSpin] onSpinFinish handler missing:', onSpinFinish);
+            return;
+        }
         onSpinFinish(winner, { source: reason });
     }, [onSpinFinish]);
 
@@ -2027,6 +2055,11 @@ function App() {
     // [GeminiFix: PromptReliability] Watchdog removed.
 
     useEffect(() => {
+        // DIAGNOSTIC: validate gameState before executing turnIntro side effects
+        if (typeof gameState !== 'string') {
+            console.warn('[DIAGNOSTIC][App.jsx][useEffect:turnIntro] gameState invalid:', gameState);
+            return;
+        }
         clearTimeout(turnIntroTimeoutRef.current);
         if (gameState === 'turnIntro') {
             turnIntroTimeoutRef.current = setTimeout(() => {
@@ -2087,6 +2120,15 @@ function App() {
     
     // [GeminiFix: ForeverPromiseAudio]
     useEffect(() => {
+        // DIAGNOSTIC: verify theme and modal state payloads before orchestrating theme transitions
+        if (typeof currentTheme !== 'string') {
+            console.warn('[DIAGNOSTIC][App.jsx][useEffect:secretTheme] currentTheme invalid during modal transition:', currentTheme);
+            return;
+        }
+        if (!modalState || typeof modalState !== 'object') {
+            console.warn('[DIAGNOSTIC][App.jsx][useEffect:secretTheme] modalState invalid during modal transition:', modalState);
+            return;
+        }
         if (modalState.type === 'secretPrompt' && !themeNameBeforeSecretRef.current) {
             themeNameBeforeSecretRef.current = currentTheme;
             (async () => {
@@ -2108,12 +2150,17 @@ function App() {
 
     // [GeminiFix: ForeverPromiseAudio]
     const handleThemeChange = useCallback(async (themeId) => {
+        // DIAGNOSTIC: ensure requested themeId is a usable string before mutating theme state
+        if (typeof themeId !== 'string' || !themeId.trim()) {
+            console.warn('[DIAGNOSTIC][App.jsx][handleThemeChange] Invalid themeId provided:', themeId);
+            return;
+        }
         const next = themeId;
         setCurrentTheme(prev => (previousThemeRef.current = prev, next));
         const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
-        
-        try { 
-            await audioEngine.startTheme(audioTheme); 
+
+        try {
+            await audioEngine.startTheme(audioTheme);
         } catch(e) {
             console.error("Failed to start theme audio", e)
         } 
@@ -2286,7 +2333,19 @@ function App() {
     }, [extremeRoundSource, roundCount, handleThemeChange, setModalState]);
 
     const pickPrompt = useCallback((category, list) => {
-        const recent = recentPrompts[category] || [];
+        // DIAGNOSTIC: validate prompt selection inputs before accessing caches
+        if (typeof category !== 'string' || !category.trim()) {
+            console.warn('[DIAGNOSTIC][App.jsx][pickPrompt] Invalid category key supplied:', category);
+            return '';
+        }
+        if (!Array.isArray(list)) {
+            console.warn('[DIAGNOSTIC][App.jsx][pickPrompt] Prompt list missing or malformed for category:', category, list);
+            return '';
+        }
+        const recent = recentPrompts && typeof recentPrompts === 'object' ? recentPrompts[category] || [] : [];
+        if (recentPrompts && typeof recentPrompts !== 'object') {
+            console.warn('[DIAGNOSTIC][App.jsx][pickPrompt] recentPrompts state invalid:', recentPrompts);
+        }
         // RELIABILITY: Ensure recent prompt cache supports includes lookups.
         const available = list.filter(p => !(Array.isArray(recent) && recent.includes(p)));
         const choice = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : list[Math.floor(Math.random() * list.length)] || 'No prompts available.';
@@ -2315,11 +2374,22 @@ function App() {
         // RELIABILITY: guard undefined winner/payload to prevent .toLowerCase() crash
         if (typeof category !== 'string' || !category.trim()) {
             console.warn("[Reliability] Invalid winner payload:", category);
+            // DIAGNOSTIC: report invalid winner payload in diagnostic channel
+            console.warn('[DIAGNOSTIC][App.jsx][handleSpinFinish] Winner category invalid:', category);
             return;
         }
         // RELIABILITY: safe normalization of category string
         const normalizedCategory = category.toLowerCase();
+        // DIAGNOSTIC: ensure prompts payload is available before destructuring
+        if (!prompts || typeof prompts !== 'object') {
+            console.warn('[DIAGNOSTIC][App.jsx][handleSpinFinish] Prompts state unavailable:', prompts);
+            return;
+        }
         const { truthPrompts, darePrompts, triviaQuestions } = prompts;
+        if (!truthPrompts || typeof truthPrompts !== 'object' || !darePrompts || typeof darePrompts !== 'object' || !triviaQuestions || typeof triviaQuestions !== 'object') {
+            console.warn('[DIAGNOSTIC][App.jsx][handleSpinFinish] Prompt collections malformed:', { truthPrompts, darePrompts, triviaQuestions });
+            return;
+        }
         const source = meta?.source || 'wheel';
         // RELIABILITY: branch prompt pools using normalized category
         const list =
@@ -2328,6 +2398,12 @@ function App() {
                 : normalizedCategory === 'dare'
                 ? (isExtremeMode ? darePrompts.extreme : [...darePrompts.normal, ...darePrompts.spicy])
                 : [...triviaQuestions.normal];
+
+        // DIAGNOSTIC: prevent downstream includes/filter operations on invalid prompt lists
+        if (!Array.isArray(list)) {
+            console.warn('[DIAGNOSTIC][App.jsx][handleSpinFinish] Derived prompt list invalid for category:', normalizedCategory, list);
+            return;
+        }
 
         const validList = list.filter(p => typeof p === 'string' && p.trim() !== '');
         // RELIABILITY: ensure prompt selection uses normalized category key
