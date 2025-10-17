@@ -93,8 +93,8 @@ if (typeof structuredClone !== "function") {
     globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
 }
 
-// RELIABILITY: Lazy audio engine facade resolves Tone graph only after runtime access.
-const audioEngine = getAudioEngine();
+// RELIABILITY: Lazy audio engine accessor exposed for runtime consumers.
+const getAudioEngineInstance = () => getAudioEngine();
 
 
 // --- DATA & PROMPTS ---
@@ -1577,6 +1577,8 @@ function App() {
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     // RELIABILITY: Capture prompt store lazily once App is evaluating.
     const dbStore = useMemo(() => getDbStore(), []);
+    // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
+    const audioEngine = useMemo(() => getAudioEngineInstance(), []);
 
     useEffect(() => {
         // DIAGNOSTIC: confirm primary App effect mounted
@@ -1632,7 +1634,8 @@ function App() {
         return () => {
             container.removeAttribute('inert');
         };
-    }, [modalState.type]);
+    // RELIABILITY: Track lazy audio engine reference to avoid stale closure after deferred init.
+    }, [modalState.type, audioEngine]);
 
     const promptQueueStateRef = useRef(queueState);
     useLayoutEffect(() => {
@@ -1831,10 +1834,17 @@ function App() {
             resumeAudioOnGesture();
             audioEngine.playModalOpen();
         }
-    }, [modalState.type]);
+    // RELIABILITY: Include deferred audio engine to avoid stale reference after lazy init.
+    }, [modalState.type, audioEngine]);
     
-    useEffect(() => { const convertToDb = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40); audioEngine.setMasterVolume(convertToDb(settings.masterVolume)); audioEngine.setMusicVolume(convertToDb(settings.musicVolume)); audioEngine.setSfxVolume(convertToDb(settings.sfxVolume)); }, [settings]);
-    useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted]);
+    useEffect(() => {
+        const convertToDb = (v) => (v === 0 ? -Infinity : (v / 100) * 40 - 40);
+        audioEngine.setMasterVolume(convertToDb(settings.masterVolume));
+        audioEngine.setMusicVolume(convertToDb(settings.musicVolume));
+        audioEngine.setSfxVolume(convertToDb(settings.sfxVolume));
+    // RELIABILITY: Depend on audio engine reference so deferred init stays consistent.
+    }, [settings, audioEngine]);
+    useEffect(() => { audioEngine.toggleMute(isMuted); }, [isMuted, audioEngine]);
     
     
     useEffect(() => {
@@ -1877,7 +1887,7 @@ function App() {
             })();
             themeNameBeforeSecretRef.current = null;
         }
-    }, [modalState.type, currentTheme]);
+    }, [modalState.type, currentTheme, audioEngine]);
 
     // [GeminiFix: ForeverPromiseAudio]
     const handleThemeChange = useCallback(async (themeId) => {
@@ -1896,7 +1906,7 @@ function App() {
             console.error("Failed to start theme audio", e)
         } 
     
-    }, [setCurrentTheme, previousThemeRef]);
+    }, [setCurrentTheme, previousThemeRef, audioEngine]);
 
     const triggerExtremeRound = useCallback((source) => {
         const wheelEl = mainContentRef.current?.querySelector('.spin-button');
@@ -1912,7 +1922,7 @@ function App() {
         setShowConfetti(true);
         setExtremeRoundSource(source);
         safeOpenModal('extremeIntro');
-    }, [safeOpenModal, currentTheme]);
+    }, [safeOpenModal, currentTheme, audioEngine]);
 
     useEffect(() => { 
         if (!isSpinInProgress && !modalState.type && pendingExtremeRound) { 
@@ -1958,7 +1968,7 @@ function App() {
             setGameState('onboarding_intro');
             setIsUnlockingAudio(false);
         }
-    }, [isUnlockingAudio]);
+    }, [isUnlockingAudio, audioEngine]);
 
     const handleNameEntry = useCallback((playerNames) => { 
         setPlayers(playerNames); 
@@ -2031,7 +2041,8 @@ function App() {
     const closeModal = useCallback(() => {
         audioEngine.playModalClose();
         setModalState({ type: "", data: null });
-    }, [setModalState]);
+    // RELIABILITY: Capture lazy audio engine reference for modal close sfx.
+    }, [setModalState, audioEngine]);
 
     const handlePromptModalClose = useCallback(() => {
         closeModal();
@@ -2178,25 +2189,28 @@ function App() {
             safeOpenModal('consequence', { text });
         }, 50);
         pendingPromptRef.current = null;
-    }, [isExtremeMode, prompts, safeOpenModal, setModalState]);
+    // RELIABILITY: Include deferred audio engine in dependencies to preserve playback.
+    }, [isExtremeMode, prompts, safeOpenModal, setModalState, audioEngine]);
 
-    const handleEditorClose = useCallback((updatedPrompts) => { 
-        if (updatedPrompts) { 
-            audioEngine.playCorrect(); 
-            updatePrompts(updatedPrompts); 
+    const handleEditorClose = useCallback((updatedPrompts) => {
+        if (updatedPrompts) {
+            audioEngine.playCorrect();
+            updatePrompts(updatedPrompts);
         }
         if (modalState.data?.from === 'settings') {
              setModalState({ type: 'settings', data: null });
         } else {
              closeModal();
         }
-    }, [updatePrompts, modalState.data, closeModal, setModalState]);
+    // RELIABILITY: Ensure lazy audio engine dependency captured for editor confirmation.
+    }, [updatePrompts, modalState.data, closeModal, setModalState, audioEngine]);
 
-    const handleConfirmReset = useCallback(() => { 
-        audioEngine.playRefuse(); 
-        resetPrompts(); 
-        setModalState({ type: 'editor', data: { from: 'settings' } }); 
-    }, [resetPrompts, setModalState]);
+    const handleConfirmReset = useCallback(() => {
+        audioEngine.playRefuse();
+        resetPrompts();
+        setModalState({ type: 'editor', data: { from: 'settings' } });
+    // RELIABILITY: Maintain lazy audio engine playback when resetting prompts.
+    }, [resetPrompts, setModalState, audioEngine]);
 
     const handleRestartGame = useCallback(() => {
         setPulseLevel(0);
