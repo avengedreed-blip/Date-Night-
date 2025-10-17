@@ -260,6 +260,17 @@ const useLocalStoragePrompts = () => {
         (async () => {
             try {
                 const stored = await dbStore.getPrompt('prompts');
+
+// VISUAL: soft crossfade on mount to smooth background appearance
+useEffect(() => {
+  const el = document.getElementById('app-content') || document.body;
+  if (!el) return;
+  try {
+    el.style.transition = 'background 0.6s ease-in-out, opacity 0.5s ease-in-out';
+    el.style.opacity = '0.85';
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+  } catch {}
+}, []);
                 if (stored) {
                     const normalized = normalizeStoredPrompts(stored);
                     if (isActive) {
@@ -2636,6 +2647,27 @@ function App() {
                 </AnimatePresence>
 
                 <div id="app-content" aria-hidden={!!modalState.type} className="w-full h-screen relative overflow-hidden">
+{/* VISUAL: parallax background layer behind UI - reacts to isSpinning */}
+<motion.div
+  id="parallax-bg"
+  className="fixed inset-0 pointer-events-none z-0"
+  initial={{ scale: 1, opacity: 0.15 }}
+  animate={isSpinning ? { scale: 1.1, opacity: 0.3 } : { scale: 1, opacity: 0.15 }}
+  transition={{ duration: 0.8, ease: "easeInOut" }}
+  transition={{ duration: 0.8, ease: 'easeInOut' }}
+  style={{ background: 'radial-gradient(circle at center, var(--theme-accent) 0%, transparent 70%)' }}
+/>
+{/* VISUAL: ambient glow overlay above parallax but below content */}
+<div
+  id="ambient-glow"
+  className="fixed inset-0 pointer-events-none z-0"
+  style={{
+    background: 'radial-gradient(circle, var(--theme-highlight) 0%, transparent 70%)',
+    opacity: 0.06,
+    mixBlendMode: 'screen'
+  }}
+/>
+
                     {renderContent()}
                 </div>
                 
@@ -2728,3 +2760,4 @@ function ModalManager({ modalState, handlePromptModalClose, handleConsequenceClo
 
 
 export default App;
+
