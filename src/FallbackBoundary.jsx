@@ -11,13 +11,46 @@ export default class FallbackBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
+  // DIAGNOSTIC: expanded error capture to stringify any thrown value
   componentDidCatch(error, info) {
+    // DIAGNOSTIC: guard diagnostics against unexpected failures
     try {
-      const msg = `[ReactError] ${error?.name}: ${error?.message}`;
-      const stack = info?.componentStack || error?.stack || '';
-      console.error(msg, stack);
-      localStorage.setItem('lastError', msg + '\n' + stack);
-    } catch {}
+      // DIAGNOSTIC: initialize message storage for arbitrary throwables
+      let msg = '';
+
+      // DIAGNOSTIC: detect native Error instances for detailed output
+      if (error instanceof Error) {
+        // DIAGNOSTIC: include name, message, and stack when available
+        msg = `[ReactError] ${error.name}: ${error.message}\n${error.stack || ''}`;
+      // DIAGNOSTIC: handle plain objects thrown as errors
+      } else if (typeof error === 'object' && error !== null) {
+        try {
+          // DIAGNOSTIC: stringify non-error objects
+          msg = '[ReactError: Non-Error object]\n' + JSON.stringify(error, null, 2);
+        } catch {
+          // DIAGNOSTIC: fallback when object cannot be stringified
+          msg = '[ReactError: Non-Error object, unstringifiable]';
+        }
+      // DIAGNOSTIC: explicitly note when undefined is thrown
+      } else if (typeof error === 'undefined') {
+        msg = '[ReactError] undefined was thrown';
+      } else {
+        // DIAGNOSTIC: stringify primitives like strings or numbers
+        msg = `[ReactError: ${typeof error}] ${String(error)}`;
+      }
+
+      // DIAGNOSTIC: append component stack for context
+      const stack = info?.componentStack || '';
+      // DIAGNOSTIC: consolidate final diagnostic payload
+      const finalMsg = `${msg}\n${stack}`;
+      // DIAGNOSTIC: log comprehensive diagnostics to console
+      console.error(finalMsg);
+      // DIAGNOSTIC: persist diagnostics for render retrieval
+      localStorage.setItem('lastError', finalMsg);
+    } catch (e) {
+      // DIAGNOSTIC: report failures in diagnostic routine itself
+      console.error('componentDidCatch diagnostic failed:', e);
+    }
     // RELIABILITY: schedule reload outside render
     try {
       if (typeof window !== 'undefined') {
@@ -35,7 +68,9 @@ export default class FallbackBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
-      let msg = 'No details';
+      // DIAGNOSTIC: display persisted diagnostics when available
+      let msg = 'No details found';
+      // DIAGNOSTIC: attempt to read diagnostics from localStorage
       try { msg = localStorage.getItem('lastError') || msg; } catch {}
       return (
         <div style={{
