@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, u
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 // RELIABILITY: IndexedDB prompt storage helpers.
 import { dbStore } from './storage';
+import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 
 // Ensure Tone.js is globally available
 import * as Tone from "tone";
@@ -1782,6 +1783,12 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
+
+    useEffect(() => {
+        // RELIABILITY: establish gesture unlock and error suppression before any audio runs
+        attachAudioGestureListeners();
+        silenceToneErrors();
+    }, []);
 
     useEffect(() => {
         // RELIABILITY: migrate legacy localStorage prompts to IndexedDB
