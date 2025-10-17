@@ -2,9 +2,13 @@
 let audioUnlocked = false;
 // RELIABILITY: unified Tone.js audio safety + gesture unlock system
 export const attachAudioGestureListeners = () => {
+  if (typeof window === 'undefined') {
+    // RELIABILITY: Skip gesture wiring when running outside the browser.
+    return;
+  }
   const resumeAudio = async () => {
     try {
-      const Tone = window.Tone;
+      const Tone = window?.Tone;
       if (Tone && Tone.context) {
         if (Tone.context.state !== 'running') {
           await Tone.start();
@@ -33,6 +37,10 @@ export const attachAudioGestureListeners = () => {
 
 // RELIABILITY: targeted suppression only for autoplay policy rejections pre-gesture
 export const silenceToneErrors = () => {
+  if (typeof window === 'undefined') {
+    // RELIABILITY: No-op when browser globals are unavailable.
+    return;
+  }
   window.addEventListener('unhandledrejection', (event) => {
     const msg = String(event.reason || '');
     // RELIABILITY: Guard autoplay rejection heuristics against non-string payloads.
@@ -51,6 +59,9 @@ export const silenceToneErrors = () => {
 
 // RELIABILITY: exposed recovery helper to re-attempt context start when errors surface
 export const recoverAudio = async () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
   try {
     if (window.Tone?.context?.state !== 'running') {
       await window.Tone.start();
@@ -68,6 +79,9 @@ export const recoverAudio = async () => {
 
 // RELIABILITY: manual safeguard for explicit context resume if needed elsewhere
 export const ensureAudioReady = async () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
     const ctx = window.Tone?.context;
     if (ctx && ctx.state === 'suspended') await ctx.resume();
