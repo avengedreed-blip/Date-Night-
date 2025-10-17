@@ -1,18 +1,21 @@
 // RELIABILITY: Core prompt persistence helpers extracted to eliminate circular evaluation risk.
 import { get, set, del, clear, keys } from 'idb-keyval';
 
-// RELIABILITY: Shared guard helpers for browser storage fallbacks.
-const hasBrowserStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const hasBrowserStorage = () => typeof localStorage !== 'undefined'; // RELIABILITY: Shared guard helpers for browser storage fallbacks.
 
-const writeBrowserFallback = (key, value) => {
-  if (!hasBrowserStorage()) {
-    return;
+const memoryFallback = {}; // RELIABILITY: In-memory persistence when localStorage is unavailable.
+
+const writeBrowserFallback = (key, value) => { // RELIABILITY: Guarded localStorage writes with memory fallback.
+  if (hasBrowserStorage()) { // RELIABILITY: localStorage available branch.
+    try { // RELIABILITY: Preserve error diagnostics for storage quota failures.
+      localStorage.setItem(key, JSON.stringify(value)); // RELIABILITY: Persist serialized prompt payload for legacy callers.
+    } catch (err) { // RELIABILITY: Capture storage exceptions for debugging visibility.
+      console.warn('[Reliability] LocalStorage fallback write failed:', err); // RELIABILITY: Log guard for observability.
+      memoryFallback[key] = JSON.stringify(value); // RELIABILITY: Record value in memory fallback when disk quota is hit.
+    }
+    return; // RELIABILITY: Exit after attempting browser storage write path.
   }
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.warn('[Reliability] LocalStorage fallback write failed:', err);
-  }
+  memoryFallback[key] = JSON.stringify(value); // RELIABILITY: Store serialized prompts in memory when localStorage is missing.
 };
 
 // RELIABILITY: Hoisted factory keeps prompt store creation reusable across modules.
@@ -42,23 +45,12 @@ export function createPromptStore() {
   };
 }
 
-// RELIABILITY: deferred singleton to avoid TDZ when modules import each other.
-let promptStoreSingleton;
-export const getPromptStore = () => {
-  if (!promptStoreSingleton) {
-    promptStoreSingleton = createPromptStore();
+let promptStoreSingleton; // RELIABILITY: deferred singleton to avoid TDZ when modules import each other.
+export const getPromptStore = () => { // RELIABILITY: Lazy getter ensures runtime initialization only.
+  if (!promptStoreSingleton) { // RELIABILITY: Instantiate store once on first access.
+    promptStoreSingleton = createPromptStore(); // RELIABILITY: Capture singleton instance lazily.
   }
-  return promptStoreSingleton;
+  return promptStoreSingleton; // RELIABILITY: Return memoized prompt store instance.
 };
 
-// RELIABILITY: maintain existing singleton export for legacy callers without eager instantiation.
-export const promptStore = new Proxy({}, {
-  get(_target, prop) {
-    const store = getPromptStore();
-    const value = store[prop];
-    if (typeof value === 'function') {
-      return value.bind(store);
-    }
-    return value;
-  }
-});
+// RELIABILITY: remove eager singleton export to prevent TDZ re-entry.
