@@ -156,7 +156,7 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* VISUAL: parallax below particles */
+/* // VISUAL: background layers */
 #parallax-bg {
   position: fixed;
   inset: 0;
@@ -168,7 +168,7 @@ body, #app-content {
   pointer-events: none;
 }
 
-/* VISUAL: glow below particles but above parallax */
+/* // VISUAL: ambient glow sits above parallax */
 #ambient-glow {
   position: fixed;
   inset: 0;
@@ -179,7 +179,7 @@ body, #app-content {
   pointer-events: none;
 }
 
-/* VISUAL: ensure particle layer renders above parallax and glow */
+/* // VISUAL: particle layer sits above background, below UI */
 .particle-canvas,
 .particle-background {
   position: fixed;
@@ -537,7 +537,7 @@ body, #app-content {
 /* ===========================================================
    MODALS / BUTTONS / INPUTS
    =========================================================== */
-/* VISUAL: modal layers */
+/* // VISUAL: ensure UI and modals always on top */
 .modal-root,
 .modal-overlay,
 .modal-content {
@@ -545,12 +545,12 @@ body, #app-content {
 }
 
 .modal-overlay {
-  z-index: 40;
+  z-index: 40 !important;
   pointer-events: auto;
 }
 
 .modal-content {
-  z-index: 50;
+  z-index: 50 !important;
   pointer-events: auto;
 }
 

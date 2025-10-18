@@ -751,8 +751,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
     const wheelCanvasRef = useRef(null);
-  const LONG_PRESS_MS = 850; // INTERACT: preserve legacy timing for long-press trigger
-  const longPressRef = useRef({ timer: null, active: false, consumeClick: false });
+  const LONG_PRESS_MS = 650; // INTERACT: secret round activation threshold for long-press gesture
+  const longPressRef = useRef({ timer: null, active: false, triggered: false }); // INTERACT: maintain timer lifecycle and trigger gating
   const failsafeRef = useRef(null);
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
@@ -806,78 +806,39 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
   // INTERACT: encapsulate secret round trigger for long-press invocation
   const triggerSecretRound = useCallback(() => {
-    const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-    setGameState("secretLoveRound");
-    handleThemeChange("foreverPromise");
-    setSecretSticky(true);
-    setIsSecretThemeUnlocked(true);
-    safeOpenModal("secretPrompt", { prompt: secretRoundPrompt });
-    if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
+    const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)]; // INTERACT: derive secret prompt payload upon activation
+    setGameState("secretLoveRound"); // INTERACT: transition game state when long-press fires
+    handleThemeChange("foreverPromise"); // INTERACT: elevate secret theme for hidden round
+    setSecretSticky(true); // INTERACT: persist secret theme selection
+    setIsSecretThemeUnlocked(true); // INTERACT: flag secret theme as unlocked
+    safeOpenModal("secretPrompt", { prompt: secretRoundPrompt }); // INTERACT: surface secret prompt modal when triggered
+    if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); } // INTERACT: update debounce timestamp for secret prompts
   }, [handleThemeChange, safeOpenModal, setGameState, setIsSecretThemeUnlocked, setSecretSticky]);
 
-  // INTERACT: robust long-press (only attaches to interactive element)
-  const onPointerDownSecret = useCallback((e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (e.isPrimary === false) return;
-    if (!canSpin || spinLock.current) return;
-
-    if (longPressRef.current.timer) {
-      clearTimeout(longPressRef.current.timer);
-      longPressRef.current.timer = null;
-    }
-    longPressRef.current.active = true;
-    longPressRef.current.consumeClick = false;
+  // INTERACT: long-press detection for secret round
+  const onSecretPointerDown = useCallback((e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // INTERACT: ignore non-primary mouse buttons
+    if (!canSpin || spinLock.current) return; // INTERACT: block secret gesture when wheel unavailable
+    longPressRef.current.active = true; // INTERACT: mark pointer as active for pending trigger
+    longPressRef.current.triggered = false; // INTERACT: reset triggered flag for this gesture lifecycle
+    if (longPressRef.current.timer) { clearTimeout(longPressRef.current.timer); } // INTERACT: clear any previous timers before scheduling new
     longPressRef.current.timer = setTimeout(() => {
-      if (!longPressRef.current.active) return;
-      longPressRef.current.active = false;
-      longPressRef.current.timer = null;
-      longPressRef.current.consumeClick = true;
-      try {
-        triggerSecretRound();
-      } catch (err) {
-        console.warn('[SecretLongPress]', err);
+      if (longPressRef.current.active) { // INTERACT: only trigger when pointer still active
+        longPressRef.current.triggered = true; // INTERACT: flag that secret round has fired
+        longPressRef.current.timer = null; // INTERACT: release timer handle after firing
+        try { triggerSecretRound(); } catch (err) { console.warn('[SecretRound]', err); } // INTERACT: invoke hidden round with error resilience
       }
-    }, LONG_PRESS_MS);
+    }, LONG_PRESS_MS); // INTERACT: delay invocation until long-press duration satisfied
   }, [canSpin, triggerSecretRound]);
 
-  // INTERACT: neutralize pending long-press timers on pointer cancel
-  const cancelLongPress = useCallback(() => {
-    longPressRef.current.active = false;
+  // INTERACT: cancel long-press timer when pointer lifts or leaves
+  const onSecretPointerCancel = useCallback(() => {
+    longPressRef.current.active = false; // INTERACT: disable pending trigger when pointer cancels
     if (longPressRef.current.timer) {
-      clearTimeout(longPressRef.current.timer);
-      longPressRef.current.timer = null;
-    }
-    if (!longPressRef.current.consumeClick) {
-      longPressRef.current.consumeClick = false;
+      clearTimeout(longPressRef.current.timer); // INTERACT: remove scheduled trigger when gesture ends
+      longPressRef.current.timer = null; // INTERACT: release timer reference for GC
     }
   }, []);
-
-  // INTERACT: suppress click when secret long-press has already fired
-  const handleSecretClickGuard = useCallback((event) => {
-    if (!longPressRef.current.consumeClick) return;
-    longPressRef.current.consumeClick = false;
-    event.preventDefault?.();
-    event.stopImmediatePropagation?.();
-  }, []);
-
-  useEffect(() => {
-    // INTERACT: ensure capture on pointerdown; cancel on move/up/cancel/leave
-    const el = document.querySelector('.spin-button');
-    if (!el) return;
-    el.addEventListener('pointerdown', onPointerDownSecret, { passive: true });
-    const cancelEvents = ['pointerup','pointercancel','pointerleave','pointermove','touchend','mouseup','mouseleave'];
-    cancelEvents.forEach((type) => {
-      el.addEventListener(type, cancelLongPress, { passive: true });
-    });
-    el.addEventListener('click', handleSecretClickGuard, true);
-    return () => {
-      el.removeEventListener('pointerdown', onPointerDownSecret);
-      cancelEvents.forEach((type) => {
-        el.removeEventListener(type, cancelLongPress);
-      });
-      el.removeEventListener('click', handleSecretClickGuard, true);
-    };
-  }, [cancelLongPress, handleSecretClickGuard, onPointerDownSecret]);
 
     // RELIABILITY: Register watchdog only after finishSpinNow is defined to avoid TDZ.
     useEffect(() => {
@@ -1125,6 +1086,10 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
             return;
         }
+        if (longPressRef.current?.triggered) { // INTERACT: bypass standard spin when secret long-press already fired
+            longPressRef.current.triggered = false; // INTERACT: reset trigger flag post-secret activation
+            return; // INTERACT: exit without spinning after hidden round entry
+        }
         lastSpinTimeRef.current = now;
         spinLock.current = true; // Acquire lock
 
@@ -1244,7 +1209,10 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 <motion.button
                     aria-label="Spin"
                     className="spin-button" onContextMenu={(e) => e.preventDefault()}
-                    onClick={handleSpin}
+                    onPointerDown={onSecretPointerDown} // INTERACT: capture long-press initiation on spin button
+                    onPointerUp={onSecretPointerCancel} // INTERACT: release long-press timer upon pointer up
+                    onPointerLeave={onSecretPointerCancel} // INTERACT: cancel timer when pointer exits button bounds
+                    onClick={handleSpin} // INTERACT: preserve standard spin activation on short tap
                     whileTap={{ scale: 0.95 }}
                 >
                     {isSpinning ? <SpinLoader /> : 'SPIN'}
@@ -2260,17 +2228,26 @@ function App() {
         safeOpenModal('extremeIntro');
     }, [safeOpenModal, currentTheme, audioEngine]);
 
-    useEffect(() => { 
-        if (!isSpinInProgress && !modalState.type && pendingExtremeRound) { 
-            triggerExtremeRound(pendingExtremeRound); 
-            setPendingExtremeRound(null); 
-        } 
+    useEffect(() => {
+        if (!isSpinInProgress && !modalState.type && pendingExtremeRound) {
+            triggerExtremeRound(pendingExtremeRound);
+            setPendingExtremeRound(null);
+        }
     }, [isSpinInProgress, modalState.type, pendingExtremeRound, triggerExtremeRound]);
+
+    // RELIABILITY: runtime diagnostics
+    useEffect(() => {
+      const particle = document.querySelector('.particle-canvas');
+      console.info('[Diagnostics] Particle canvas:', !!particle ? 'mounted' : 'missing');
+      if (particle) console.info('[Diagnostics] Particle z-index:', getComputedStyle(particle).zIndex);
+      const spin = document.querySelector('.spin-button');
+      console.info('[Diagnostics] Spin button pointer-events:', spin ? getComputedStyle(spin).pointerEvents : 'N/A');
+    }, []);
 
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
         setIsUnlockingAudio(true);
-    
+
         const attemptAudioInit = async () => {
             if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
                 setScriptLoadState('error'); // RELIABILITY: Surface loading issues when Tone is unavailable.
@@ -2685,6 +2662,19 @@ function App() {
         );
     };
 
+    const particleCanvasLayer = ( // VISUAL: fallback particle shimmer ensuring background visibility
+      <div
+        className="particle-canvas fixed inset-0 pointer-events-none" // VISUAL: layer spans viewport without intercepting input
+        style={{ // VISUAL: inline style to guarantee immediate shimmer rendering
+          zIndex: 10, // VISUAL: align particle sheet beneath modal overlay
+          mixBlendMode: 'screen', // VISUAL: blend shimmer with dynamic backgrounds
+          opacity: 0.9, // VISUAL: keep glow subtle yet visible
+          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15) 0%, transparent 70%)', // VISUAL: fallback gradient simulating particle glow
+        }}
+        aria-hidden="true"
+      />
+    );
+
     return (
         <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
             <div
@@ -2705,6 +2695,8 @@ function App() {
                       reducedMotion={prefersReducedMotion}
                   />
                 </ParticleLayerPortal>
+                {/* // VISUAL: mount fallback shimmer layer above transformed content */}
+                {particleCanvasLayer}
                 <div
                     id="app-content"
                     aria-hidden={!!modalState.type}
