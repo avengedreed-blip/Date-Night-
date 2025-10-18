@@ -6,6 +6,7 @@ console.log('[APP] App.jsx module loading...');
 /* --- SECRET ROUND TIMING PATCH --- */
 /* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom'; // RELIABILITY: safe import
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 // RELIABILITY: IndexedDB prompt storage helpers.
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
@@ -39,6 +40,12 @@ const secretPromptOpenAt = { t: 0 };
 // Polyfill for structuredClone for wider browser compatibility.
 if (typeof structuredClone !== "function") {
     globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
+}
+
+// VISUAL: particles mounted outside stacking contexts
+function ParticleLayerPortal({ children }) {
+  const target = typeof document !== 'undefined' ? document.body : null;
+  return target ? createPortal(children, target) : null;
 }
 
 // RELIABILITY: Lazy audio engine accessor exposed for runtime consumers.
@@ -733,7 +740,8 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
         };
     }, [onFinish, theme, reducedMotion]);
 
-    return <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-[100] pointer-events-none" />;
+    const resolvedClassName = className ? `particle-canvas ${className}` : 'particle-canvas';
+    return <canvas ref={canvasRef} className={resolvedClassName} style={style} />;
 };
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
@@ -743,7 +751,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
     const wheelCanvasRef = useRef(null);
-  const secretPressTimerRef = useRef(null);
+  const LONG_PRESS_MS = 850; // INTERACT: preserve legacy timing for long-press trigger
+  const longPressRef = useRef({ timer: null, active: false, consumeClick: false });
   const failsafeRef = useRef(null);
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
@@ -794,6 +803,81 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
             setIsSpinInProgress(false);
         }
     }, [finalizeSpin, playWheelStop, setIsSpinInProgress]);
+
+  // INTERACT: encapsulate secret round trigger for long-press invocation
+  const triggerSecretRound = useCallback(() => {
+    const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
+    setGameState("secretLoveRound");
+    handleThemeChange("foreverPromise");
+    setSecretSticky(true);
+    setIsSecretThemeUnlocked(true);
+    safeOpenModal("secretPrompt", { prompt: secretRoundPrompt });
+    if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
+  }, [handleThemeChange, safeOpenModal, setGameState, setIsSecretThemeUnlocked, setSecretSticky]);
+
+  // INTERACT: robust long-press (only attaches to interactive element)
+  const onPointerDownSecret = useCallback((e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.isPrimary === false) return;
+    if (!canSpin || spinLock.current) return;
+
+    if (longPressRef.current.timer) {
+      clearTimeout(longPressRef.current.timer);
+      longPressRef.current.timer = null;
+    }
+    longPressRef.current.active = true;
+    longPressRef.current.consumeClick = false;
+    longPressRef.current.timer = setTimeout(() => {
+      if (!longPressRef.current.active) return;
+      longPressRef.current.active = false;
+      longPressRef.current.timer = null;
+      longPressRef.current.consumeClick = true;
+      try {
+        triggerSecretRound();
+      } catch (err) {
+        console.warn('[SecretLongPress]', err);
+      }
+    }, LONG_PRESS_MS);
+  }, [canSpin, triggerSecretRound]);
+
+  // INTERACT: neutralize pending long-press timers on pointer cancel
+  const cancelLongPress = useCallback(() => {
+    longPressRef.current.active = false;
+    if (longPressRef.current.timer) {
+      clearTimeout(longPressRef.current.timer);
+      longPressRef.current.timer = null;
+    }
+    if (!longPressRef.current.consumeClick) {
+      longPressRef.current.consumeClick = false;
+    }
+  }, []);
+
+  // INTERACT: suppress click when secret long-press has already fired
+  const handleSecretClickGuard = useCallback((event) => {
+    if (!longPressRef.current.consumeClick) return;
+    longPressRef.current.consumeClick = false;
+    event.preventDefault?.();
+    event.stopImmediatePropagation?.();
+  }, []);
+
+  useEffect(() => {
+    // INTERACT: ensure capture on pointerdown; cancel on move/up/cancel/leave
+    const el = document.querySelector('.spin-button');
+    if (!el) return;
+    el.addEventListener('pointerdown', onPointerDownSecret, { passive: true });
+    const cancelEvents = ['pointerup','pointercancel','pointerleave','pointermove','touchend','mouseup','mouseleave'];
+    cancelEvents.forEach((type) => {
+      el.addEventListener(type, cancelLongPress, { passive: true });
+    });
+    el.addEventListener('click', handleSecretClickGuard, true);
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDownSecret);
+      cancelEvents.forEach((type) => {
+        el.removeEventListener(type, cancelLongPress);
+      });
+      el.removeEventListener('click', handleSecretClickGuard, true);
+    };
+  }, [cancelLongPress, handleSecretClickGuard, onPointerDownSecret]);
 
     // RELIABILITY: Register watchdog only after finishSpinNow is defined to avoid TDZ.
     useEffect(() => {
@@ -1156,40 +1240,6 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
             <div
   className="spin-button-wrapper"
   onContextMenu={(e) => e.preventDefault()}
-  onPointerDown={() => {
-    if (!canSpin || spinLock.current) return;
-    secretPressTimerRef.current = setTimeout(() => {
-        const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-        setGameState("secretLoveRound");
-        handleThemeChange("foreverPromise");
-        setSecretSticky(true);
-        setIsSecretThemeUnlocked(true);
-        safeOpenModal("secretPrompt", { prompt: secretRoundPrompt });
-        if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); }
-
-        secretPressTimerRef.current = null;
-    }, 850);
-  }}
-  onPointerUp={() => {
-    if (secretPressTimerRef.current) {
-      clearTimeout(secretPressTimerRef.current);
-      secretPressTimerRef.current = null;
-      handleSpin();
-    }
-  }}
-  onPointerLeave={() => {
-    if (secretPressTimerRef.current) {
-      clearTimeout(secretPressTimerRef.current);
-      secretPressTimerRef.current = null;
-    }
-  }}
-  onPointerCancel={() => {
-    if (secretPressTimerRef.current) {
-      clearTimeout(secretPressTimerRef.current);
-      secretPressTimerRef.current = null;
-      handleSpin();
-    }
-  }}
 >
 <motion.button
                     aria-label="Spin"
@@ -1253,9 +1303,10 @@ const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClas
 
   if (!visible) return null;
 
+  // VISUAL: modal overlay/content align with z-index contract for click-through reliability
   return (
     <motion.div
-      className="fixed inset-0 z-[110] flex justify-center items-start md:items-center p-4 pt-[15vh] md:pt-4"
+      className="modal-overlay fixed inset-0 z-[110] flex justify-center items-start md:items-center p-4 pt-[15vh] md:pt-4"
       onClick={onClose}
       initial={{ backgroundColor: "rgba(0,0,0,0)" }}
       animate={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1265,7 +1316,7 @@ const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClas
         ref={parallax.ref}
         style={parallax.style}
         tabIndex={-1}
-        className={`relative outline-none w-full max-w-sm flex flex-col modal-metallic ${activeVisualTheme?.themeClass ?? ""} ${customClasses}`}
+        className={`modal-content relative outline-none w-full max-w-sm flex flex-col modal-metallic ${activeVisualTheme?.themeClass ?? ""} ${customClasses}`}
         onClick={(e) => e.stopPropagation()}
         initial={{ scale: 0.95, opacity: 0, y: 30, filter: "blur(8px)" }}
         animate={{ scale: 1, opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -1300,7 +1351,8 @@ const RadialLighting = ({ reducedMotion }) => {
         window.addEventListener('mousemove', handleMouseMove);
         return () => window.removeEventListener('mousemove', handleMouseMove);
     }, [lightX, lightY, reducedMotion]);
-    return <motion.div className="radial-light-overlay" style={{ '--light-x': lightX, '--light-y': lightY }} />;
+    // VISUAL: keep radial light as non-interactive backdrop
+    return <motion.div className="radial-light-overlay pointer-events-none" style={{ '--light-x': lightX, '--light-y': lightY }} />;
 };
 const PowerSurgeEffect = ({ onComplete, reducedMotion }) => (
     <motion.div
@@ -1946,6 +1998,18 @@ function App() {
     const activeBackgroundClass = visualThemes[backgroundTheme]?.bg || visualThemes.velourNights.bg;
 
     const [prevBackgroundClass, setPrevBackgroundClass] = useState(activeBackgroundClass);
+
+    useEffect(() => {
+        if (typeof document === 'undefined') { return; }
+        // RELIABILITY: surface particle mount diagnostics for QA verification
+        console.info('[Particles] Portal mount:', !!document.querySelector('.particle-canvas'));
+        const parallax = document.getElementById('parallax-bg');
+        const glow = document.getElementById('ambient-glow');
+        const parallaxZ = parallax ? getComputedStyle(parallax).zIndex : 'n/a';
+        const glowZ = glow ? getComputedStyle(glow).zIndex : 'n/a';
+        // RELIABILITY: confirm layering contract for parallax/glow planes
+        console.info('[Layers] parallax z:', parallaxZ, 'glow z:', glowZ);
+    }, [backgroundTheme]);
 
     const initialThemeRef = useRef(currentTheme); // RELIABILITY: capture initial theme for one-time mount sync.
 
@@ -2632,14 +2696,15 @@ function App() {
                 }}
             >
                 {/* VISUAL: root wrapper keeps visual layers aligned outside transformed regions */}
-                {/* VISUAL: global particle layer mounted as sibling to app-content */}
-                <ParticleBackground
-                    currentTheme={backgroundTheme}
-                    pulseLevel={pulseLevel}
-                    bpm={audioEngine.getCurrentBpm()}
-                    reducedMotion={prefersReducedMotion}
-                    className="fixed inset-0 pointer-events-none z-10"
-                />
+                {/* VISUAL: global particle layer above background, below UI */}
+                <ParticleLayerPortal>
+                  <ParticleBackground
+                      currentTheme={backgroundTheme}
+                      pulseLevel={pulseLevel}
+                      bpm={audioEngine.getCurrentBpm()}
+                      reducedMotion={prefersReducedMotion}
+                  />
+                </ParticleLayerPortal>
                 <div
                     id="app-content"
                     aria-hidden={!!modalState.type}
@@ -2664,10 +2729,11 @@ function App() {
                         id="ambient-glow"
                         className="fixed inset-0 pointer-events-none"
                     />
-                    <div className="hdr-glow-overlay" />
+                    {/* VISUAL: ensure overlays never block input */}
+                    <div className="hdr-glow-overlay pointer-events-none" />
                     <Vignette />
                     <NoiseOverlay reducedMotion={prefersReducedMotion} />
-                    <div className="aurora-reflect" />
+                    <div className="aurora-reflect pointer-events-none" />
                     <RadialLighting reducedMotion={prefersReducedMotion} />
 
                     <AnimatePresence>
