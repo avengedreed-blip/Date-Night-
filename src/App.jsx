@@ -2659,18 +2659,11 @@ function App() {
         );
     };
 
-    useEffect(() => { // RELIABILITY: runtime diagnostics to verify fixes
-      const particle = document.querySelector('.particle-canvas, .particle-background'); // RELIABILITY: check particle mount state
-      console.info('[Diag] particle canvas mounted:', !!particle); // RELIABILITY: log particle presence
-      if (particle) console.info('[Diag] particle z-index:', getComputedStyle(particle).zIndex); // RELIABILITY: report particle layering
-
-      const spin = document.querySelector('.spin-button'); // INTERACT: verify spin button pointer state
-      console.info('[Diag] spin button pointer-events:', spin ? getComputedStyle(spin).pointerEvents : 'N/A'); // RELIABILITY: ensure spin button interactive
-
-      const overlay = document.querySelector('.modal-overlay'); // VISUAL: capture modal overlay layer for diagnostics
-      const content = document.querySelector('.modal-content'); // VISUAL: capture modal content layer for diagnostics
-      console.info('[Diag] modal overlay z:', overlay ? getComputedStyle(overlay).zIndex : 'N/A', // RELIABILITY: report overlay z-index
-                   'content z:', content ? getComputedStyle(content).zIndex : 'N/A'); // RELIABILITY: report content z-index
+    // RELIABILITY: runtime check
+    useEffect(() => {
+      const el = document.querySelector('.particle-canvas, .particle-background');
+      console.info('[Diag] particle canvas mounted:', !!el);
+      if (el) console.info('[Diag] particle z-index:', getComputedStyle(el).zIndex);
     }, []);
 
     return (
@@ -2684,7 +2677,7 @@ function App() {
                 }}
             >
                 {/* VISUAL: root wrapper keeps visual layers aligned outside transformed regions */}
-                {/* VISUAL: global particle layer above background, below UI */}
+                {/* VISUAL: global particle layer – portal to <body> */}
                 <ParticleLayerPortal>
                   <ParticleBackground
                       currentTheme={backgroundTheme}
