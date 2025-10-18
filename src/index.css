@@ -156,41 +156,40 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* // VISUAL: background layers */
+/* VISUAL: parallax behind everything, transparent alpha */
 #parallax-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  /* VISUAL: soften gradient alpha to reveal particle glow */
-  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.15) 0%, transparent 70%);
-  opacity: 0.08;
-  mix-blend-mode: lighten;
-  pointer-events: none;
+  position: fixed; /* VISUAL: anchor gradient plane to viewport */
+  inset: 0; /* VISUAL: cover entire screen */
+  z-index: 0; /* VISUAL: ensure base layer depth */
+  pointer-events: none; /* INTERACT: keep parallax from intercepting input */
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.15) 0%, transparent 70%); /* VISUAL: maintain softened gradient */
+  opacity: 0.08; /* VISUAL: gentle intensity */
+  mix-blend-mode: lighten; /* VISUAL: blend with themes */
 }
 
-/* // VISUAL: ambient glow sits above parallax */
+/* VISUAL: glow above parallax, still non-interactive */
 #ambient-glow {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-highlight-rgb),0.2) 0%, transparent 70%);
-  opacity: 0.04;
-  mix-blend-mode: screen;
-  pointer-events: none;
+  position: fixed; /* VISUAL: lock glow to viewport */
+  inset: 0; /* VISUAL: span full screen */
+  z-index: 1; /* VISUAL: layer glow above parallax */
+  pointer-events: none; /* INTERACT: keep glow inert */
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-highlight-rgb),0.2) 0%, transparent 70%); /* VISUAL: preserve glow gradient */
+  opacity: 0.04; /* VISUAL: subtle luminance */
+  mix-blend-mode: screen; /* VISUAL: blend highlight */
 }
 
-/* // VISUAL: particle layer sits above background, below UI */
+/* VISUAL: particle canvas above parallax/glow, below UI */
 .particle-canvas,
 .particle-background {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  width: 100%;
-  height: 100%;
-  opacity: 0.9;
-  pointer-events: none;
-  object-fit: cover;
-  mix-blend-mode: screen;
+  position: fixed; /* VISUAL: keep particle layer locked */
+  inset: 0; /* VISUAL: fill viewport */
+  z-index: 10; /* VISUAL: ensure layer ordering */
+  width: 100%; /* VISUAL: stretch canvas horizontally */
+  height: 100%; /* VISUAL: stretch canvas vertically */
+  opacity: 0.9; /* VISUAL: balance visibility */
+  pointer-events: none; /* INTERACT: prevent particle capture */
+  object-fit: cover; /* VISUAL: maintain scaling */
+  mix-blend-mode: screen; /* VISUAL: blend highlights */
 }
 
 /* VISUAL: dynamic particle recolor (for potential CSS particle elements) */
@@ -537,7 +536,7 @@ body, #app-content {
 /* ===========================================================
    MODALS / BUTTONS / INPUTS
    =========================================================== */
-/* // VISUAL: ensure UI and modals always on top */
+/* VISUAL: modal stack on top — ensure clickability */
 .modal-root,
 .modal-overlay,
 .modal-content {
