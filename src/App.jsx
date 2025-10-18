@@ -1306,7 +1306,9 @@ const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClas
   );
 };
 const Vignette = () => <div className="fixed inset-0 z-10 pointer-events-none vignette-overlay" />;
-const NoiseOverlay = ({ reducedMotion }) => <div className={`fixed inset-0 z-10 pointer-events-none opacity-[0.04] ${reducedMotion ? '' : 'noise-animated'}`} />;
+const NoiseOverlay = ({ reducedMotion }) => ( // VISUAL: keep film-grain below particle canvas to avoid z-index ties
+  <div className={`fixed inset-0 z-[9] pointer-events-none opacity-[0.04] ${reducedMotion ? '' : 'noise-animated'}`} />
+);
 const RadialLighting = ({ reducedMotion }) => {
     const lightX = useMotionValue('-100%');
     const lightY = useMotionValue('-100%');
@@ -1868,20 +1870,16 @@ function App() {
         }
     }, [modalState?.type]);
 
-    useEffect(() => {
-        const container = document.getElementById('app-content');
-        if (!container) return;
-        if (modalState.type) {
-            // RELIABILITY: Inert background while modal is active to prevent focus conflicts.
-            container.setAttribute('inert', '');
-        } else {
-            container.removeAttribute('inert');
-        }
-        return () => {
-            container.removeAttribute('inert');
-        };
-    // RELIABILITY: Track lazy audio engine reference to avoid stale closure after deferred init.
-    }, [modalState.type, audioEngine]);
+    const mainContentRef = useRef(null); // INTERACT: track gameplay container for selective inerting
+
+    // INTERACT: only inert the main gameplay content, never the modal subtree
+    useEffect(() => { // RELIABILITY: inert background without blocking modals
+      const el = mainContentRef?.current; // INTERACT: resolve main content element reference
+      if (!el) return; // RELIABILITY: guard against missing ref targets
+      if (modalState?.type) el.setAttribute('inert', ''); // INTERACT: disable interactions when modal open
+      else el.removeAttribute('inert'); // INTERACT: restore interactions once modal closes
+      return () => el.removeAttribute('inert'); // RELIABILITY: cleanup inert attribute on unmount
+    }, [modalState?.type]); // RELIABILITY: strict dep list
 
     const promptQueueStateRef = useRef(queueState);
     useLayoutEffect(() => {
@@ -1914,7 +1912,6 @@ function App() {
     const [currentPlayer, setCurrentPlayer] = useState('p1');
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
-    const mainContentRef = useRef(null);
 
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
@@ -2662,18 +2659,19 @@ function App() {
         );
     };
 
-    const particleCanvasLayer = ( // VISUAL: fallback particle shimmer ensuring background visibility
-      <div
-        className="particle-canvas fixed inset-0 pointer-events-none" // VISUAL: layer spans viewport without intercepting input
-        style={{ // VISUAL: inline style to guarantee immediate shimmer rendering
-          zIndex: 10, // VISUAL: align particle sheet beneath modal overlay
-          mixBlendMode: 'screen', // VISUAL: blend shimmer with dynamic backgrounds
-          opacity: 0.9, // VISUAL: keep glow subtle yet visible
-          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15) 0%, transparent 70%)', // VISUAL: fallback gradient simulating particle glow
-        }}
-        aria-hidden="true"
-      />
-    );
+    useEffect(() => { // RELIABILITY: runtime diagnostics to verify fixes
+      const particle = document.querySelector('.particle-canvas, .particle-background'); // RELIABILITY: check particle mount state
+      console.info('[Diag] particle canvas mounted:', !!particle); // RELIABILITY: log particle presence
+      if (particle) console.info('[Diag] particle z-index:', getComputedStyle(particle).zIndex); // RELIABILITY: report particle layering
+
+      const spin = document.querySelector('.spin-button'); // INTERACT: verify spin button pointer state
+      console.info('[Diag] spin button pointer-events:', spin ? getComputedStyle(spin).pointerEvents : 'N/A'); // RELIABILITY: ensure spin button interactive
+
+      const overlay = document.querySelector('.modal-overlay'); // VISUAL: capture modal overlay layer for diagnostics
+      const content = document.querySelector('.modal-content'); // VISUAL: capture modal content layer for diagnostics
+      console.info('[Diag] modal overlay z:', overlay ? getComputedStyle(overlay).zIndex : 'N/A', // RELIABILITY: report overlay z-index
+                   'content z:', content ? getComputedStyle(content).zIndex : 'N/A'); // RELIABILITY: report content z-index
+    }, []);
 
     return (
         <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
@@ -2695,8 +2693,6 @@ function App() {
                       reducedMotion={prefersReducedMotion}
                   />
                 </ParticleLayerPortal>
-                {/* // VISUAL: mount fallback shimmer layer above transformed content */}
-                {particleCanvasLayer}
                 <div
                     id="app-content"
                     aria-hidden={!!modalState.type}
