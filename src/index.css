@@ -161,7 +161,8 @@ body, #app-content {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.25) 0%, transparent 70%);
+  /* VISUAL: soften gradient alpha to reveal particle glow */
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.15) 0%, transparent 70%);
   opacity: 0.08;
   mix-blend-mode: lighten;
   pointer-events: none;
