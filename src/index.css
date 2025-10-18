@@ -156,7 +156,7 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* VISUAL: parallax sits behind everything with transparent alpha gradient */
+/* VISUAL: parallax below particles */
 #parallax-bg {
   position: fixed;
   inset: 0;
@@ -168,7 +168,7 @@ body, #app-content {
   pointer-events: none;
 }
 
-/* VISUAL: subtle glow overlay above parallax but below particles */
+/* VISUAL: glow below particles but above parallax */
 #ambient-glow {
   position: fixed;
   inset: 0;
@@ -537,6 +537,31 @@ body, #app-content {
 /* ===========================================================
    MODALS / BUTTONS / INPUTS
    =========================================================== */
+/* VISUAL: modal layers */
+.modal-root,
+.modal-overlay,
+.modal-content {
+  position: fixed;
+}
+
+.modal-overlay {
+  z-index: 40;
+  pointer-events: auto;
+}
+
+.modal-content {
+  z-index: 50;
+  pointer-events: auto;
+}
+
+/* VISUAL: prevent background visuals from intercepting input */
+#parallax-bg,
+#ambient-glow,
+.particle-canvas,
+.particle-background {
+  pointer-events: none;
+}
+
 .modal-metallic {
   position: relative;
   background:
