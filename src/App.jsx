@@ -1873,13 +1873,27 @@ function App() {
     const mainContentRef = useRef(null); // INTERACT: track gameplay container for selective inerting
 
     // INTERACT: only inert the main gameplay content, never the modal subtree
-    useEffect(() => { // RELIABILITY: inert background without blocking modals
-      const el = mainContentRef?.current; // INTERACT: resolve main content element reference
-      if (!el) return; // RELIABILITY: guard against missing ref targets
-      if (modalState?.type) el.setAttribute('inert', ''); // INTERACT: disable interactions when modal open
-      else el.removeAttribute('inert'); // INTERACT: restore interactions once modal closes
-      return () => el.removeAttribute('inert'); // RELIABILITY: cleanup inert attribute on unmount
-    }, [modalState?.type]); // RELIABILITY: strict dep list
+    // INTERACT: safely manage inert on main content to prevent null deref after modal close
+    useEffect(() => {
+      const el = mainContentRef?.current;
+      if (!el) return;
+
+      if (modalState?.type) {
+        el.setAttribute('inert', '');
+      } else {
+        el.removeAttribute('inert');
+      }
+
+      // RELIABILITY: guarded cleanup avoids crashes during unmount or async state updates
+      return () => {
+        try {
+          const node = mainContentRef?.current;
+          if (node && node.hasAttribute('inert')) node.removeAttribute('inert');
+        } catch (err) {
+          console.warn('[Modal inert cleanup skipped safely]', err);
+        }
+      };
+    }, [modalState?.type]);
 
     const promptQueueStateRef = useRef(queueState);
     useLayoutEffect(() => {
@@ -2356,7 +2370,10 @@ function App() {
     
     const closeModal = useCallback(() => {
         audioEngine.playModalClose();
-        setModalState({ type: "", data: null });
+        // RELIABILITY: debounce modal close to avoid race between exit animation and unmount
+        setTimeout(() => {
+            setModalState({ type: "", data: null });
+        }, 150);
     // RELIABILITY: Capture lazy audio engine reference for modal close sfx.
     }, [setModalState, audioEngine]);
 
