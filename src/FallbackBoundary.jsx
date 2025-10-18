@@ -13,8 +13,11 @@ export default class FallbackBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  // DIAGNOSTIC: expanded error capture to stringify any thrown value
+  // DIAG: capture actual runtime error before showing fallback
   componentDidCatch(error, info) {
+    console.error('[FallbackBoundary caught error]', error, info);
+    this.setState({ hasError: true });
+    // DIAGNOSTIC: expanded error capture to stringify any thrown value
     // DIAGNOSTIC: guard diagnostics against unexpected failures
     try {
       // DIAGNOSTIC: initialize message storage for arbitrary throwables
