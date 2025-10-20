@@ -12,30 +12,18 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     };
 
     try {
-      // DIAGNOSTIC: mark React import
-      log('Importing React...');
-      // DIAGNOSTIC: dynamically import React
-      const React = await import('react');
-
-      // DIAGNOSTIC: mark ReactDOM import
-      log('Importing ReactDOM...');
-      // DIAGNOSTIC: dynamically import ReactDOM client
-      const ReactDOM = await import('react-dom/client');
-
-      // DIAGNOSTIC: mark App.jsx import
-      log('Importing App.jsx...');
-      // DIAGNOSTIC: dynamically import App component
-      const { default: App } = await import('./App.jsx');
-
-      // DIAGNOSTIC: mark FallbackBoundary import
-      log('Importing FallbackBoundary.jsx...');
-      // DIAGNOSTIC: dynamically import FallbackBoundary component
-      const { default: FallbackBoundary } = await import('./FallbackBoundary.jsx');
-
-      // DIAGNOSTIC: mark index.css import
-      log('Importing index.css...');
-      // DIAGNOSTIC: dynamically import global stylesheet
-      await import('./index.css');
+      // DIAGNOSTIC: mark parallel import batch
+      log('Importing core modules in parallel...'); // [Fix H4]
+      const [React, ReactDOM, appModule, fallbackModule, cssModule] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('./App.jsx'),
+        import('./FallbackBoundary.jsx'),
+        import('./index.css'),
+      ]); // [Fix H4]
+      void cssModule; // [Fix H4]
+      const { default: App } = appModule; // [Fix H4]
+      const { default: FallbackBoundary } = fallbackModule; // [Fix H4]
 
       // DIAGNOSTIC: mark root element creation
       log('Creating root...');
@@ -114,7 +102,16 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // DIAGNOSTIC: preserve environment sanity alert
   if (!window.crypto || typeof navigator === 'undefined' || !navigator.serviceWorker) {
     // DIAGNOSTIC: notify unsupported browsers as before
-    alert("Unsupported browser for full experience.");
+    const existingBanner = document.getElementById('support-warning');
+    if (!existingBanner) {
+      const banner = document.createElement('div');
+      banner.id = 'support-warning';
+      banner.role = 'status';
+      banner.setAttribute('aria-live', 'polite');
+      banner.textContent = 'Some features may be limited without secure context or service worker support.';
+      banner.style.cssText = 'position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#1f2937;color:#f9fafb;padding:0.75rem 1.25rem;border-radius:0.5rem;box-shadow:0 10px 20px rgba(0,0,0,0.25);z-index:9999;font-family:system-ui,sans-serif;font-size:0.875rem;max-width:90vw;text-align:center;'; // [Fix M4]
+      document.body.appendChild(banner);
+    }
   }
   // PWA: force update on each load
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {

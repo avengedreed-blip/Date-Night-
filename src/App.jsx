@@ -14,8 +14,7 @@ import { getDbStoreInstance } from './utils/promptStoreCore.js'; // RELIABILITY:
 // RELIABILITY: load gesture logic first (inert)
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 // RELIABILITY: then load core engine (lazy async Tone)
-import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
-import * as Tone from 'tone'; // [Fix F1/E1] Ensure Tone is bundled locally without CDN
+import { getAudioEngine, resumeAudioOnGesture, loadTone } from './core/audioCore.js'; // [Fix H2]
 
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
 const safeUUID = () => {
@@ -34,10 +33,6 @@ const scheduleMicrotask = (fn) => {
   }
   Promise.resolve().then(fn);
 };
-
-if (typeof globalThis !== 'undefined' && !globalThis.Tone) {
-  globalThis.Tone = Tone; // [Fix F1/E1] Expose bundled Tone on the global scope for legacy access
-}
 
 // Registry to suppress click immediately after a secret round opens
 const secretPromptOpenAt = { t: 0 };
@@ -1835,16 +1830,29 @@ function App() {
 
     // RELIABILITY: async init for audio engine after mount
     useEffect(() => {
-        attachAudioGestureListeners();
+        const detachGestureListeners = attachAudioGestureListeners(); // [Fix C1][Fix M2]
         silenceToneErrors();
+        let cancelled = false; // [Fix C1]
         (async () => {
             try {
-                const engine = await getAudioEngine();
-                if (engine?.initialize) await engine.initialize();
+                await loadTone(); // [Fix H2]
+                await getAudioEngine(); // [Fix C1]
+                if (!cancelled) {
+                    setScriptLoadState('loaded'); // [Fix C1]
+                }
             } catch (err) {
-                console.warn('[Reliability] Audio engine init failed:', err);
+                console.warn('[Reliability] Audio engine warm load failed:', err); // [Fix C1]
+                if (!cancelled) {
+                    setScriptLoadState('error'); // [Fix C1]
+                }
             }
         })();
+        return () => {
+            cancelled = true; // [Fix C1]
+            if (typeof detachGestureListeners === 'function') {
+                detachGestureListeners(); // [Fix M2]
+            }
+        };
     }, []);
 
     useEffect(() => { // RELIABILITY: migrate legacy localStorage prompts to IndexedDB lazily
@@ -2210,15 +2218,6 @@ function App() {
         setModalState({ type, data });
       }, [setModalState]);
 
-    useEffect(() => { // [Fix F1/E1] Mark Tone as loaded without DOM script injection
-        if (typeof window === 'undefined') {
-            return undefined;
-        }
-        window.Tone = window.Tone || Tone;
-        safeSetScriptLoadState('loaded');
-        return undefined;
-    }, [safeSetScriptLoadState]);
-
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
             // RELIABILITY: Ensure audio context resumes before playing modal SFX.
@@ -2335,42 +2334,50 @@ function App() {
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
         setIsUnlockingAudio(true);
+        safeSetAudioInitFailed(false); // [Fix M1]
 
         const attemptAudioInit = async () => {
             if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
-                safeSetScriptLoadState('error'); // RELIABILITY: Surface loading issues when Tone is unavailable.
-                return false; // RELIABILITY: Abort initialization when Tone context missing.
+                safeSetScriptLoadState('error'); // [Fix C1]
+                return false; // [Fix C1]
             }
             try {
-                if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); } // RELIABILITY: Resume audio context only when Tone exists.
+                await resumeAudioOnGesture(); // [Fix C1]
             } catch (e) {
-                console.error("Audio unlock failed:", e);
-                return false;
+                console.error('Audio unlock failed:', e); // [Fix M1]
+                return false; // [Fix M1]
             }
-            const success = await audioEngine.initialize();
+            const success = await audioEngine.initialize(); // [Fix C1]
             if (success) {
-                await audioEngine.startTheme("velourNights");
+                await audioEngine.startTheme('velourNights'); // [Fix C1]
+                safeSetScriptLoadState('ready'); // [Fix M1]
             }
-            return success;
+            return success; // [Fix C1]
         };
-    
+
+        let unlockSucceeded = false; // [Fix M1]
         try {
-            const success = await attemptAudioInit();
-            if (!success) {
-                setTimeout(async () => {
-                    // RELIABILITY: verify mount state before retrying audio unlock.
-                    if (!isMounted.current) return;
-                    const retrySuccess = await attemptAudioInit();
-                    if (!retrySuccess) safeSetAudioInitFailed(true);
-                }, 1000);
+            for (let attempt = 0; attempt < 2 && !unlockSucceeded; attempt += 1) { // [Fix M1]
+                const success = await attemptAudioInit(); // [Fix C1]
+                if (success) {
+                    unlockSucceeded = true; // [Fix M1]
+                } else if (attempt === 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000)); // [Fix M1]
+                }
+            }
+            if (!unlockSucceeded) {
+                safeSetAudioInitFailed(true); // [Fix M1]
+                safeSetScriptLoadState('error'); // [Fix M1]
             }
         } catch (err) {
-            console.error("Audio init failed:", err);
-            safeSetAudioInitFailed(true);
+            console.error('Audio init failed:', err); // [Fix M1]
+            safeSetAudioInitFailed(true); // [Fix M1]
+            safeSetScriptLoadState('error'); // [Fix M1]
         } finally {
-            // RELIABILITY: guard final onboarding state writes during teardown.
-            safeSetGameState('onboarding_intro');
-            safeSetIsUnlockingAudio(false);
+            if (unlockSucceeded) {
+                safeSetGameState('onboarding_intro'); // [Fix M1]
+            }
+            safeSetIsUnlockingAudio(false); // [Fix M1]
         }
     }, [isUnlockingAudio, audioEngine, safeSetScriptLoadState, safeSetAudioInitFailed, safeSetGameState, safeSetIsUnlockingAudio]);
 
@@ -2487,7 +2494,7 @@ function App() {
             safeSetGameState("extremeRound"); // RELIABILITY: guard extreme round transition when modal closes asynchronously
             setExtremeModeReady(true); // GAMELOGIC: mark extreme prompt pipeline ready
         }
-        if (extremeRoundSource === 'spark' && (roundCount + 1) % 5 === 0) {
+        if (extremeRoundSource === 'spark' && roundCount % 5 === 0) { // [Fix C2]
             setTimeout(() => {
                 // RELIABILITY: guard spark reset pulse against unmounted component.
                 safeSetPulseLevel(0);
@@ -2826,7 +2833,16 @@ function App() {
                             <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={currentTheme} reducedMotion={prefersReducedMotion} />
                         )}
                         {showPowerSurge && (
-                            <PowerSurgeEffect key="power-surge" onComplete={() => setShowPowerSurge(false)} reducedMotion={prefersReducedMotion} />
+                            <PowerSurgeEffect
+                                key="power-surge"
+                                onComplete={() => {
+                                    setShowPowerSurge(false);
+                                    if (extremeRoundSource === 'spark') {
+                                        safeSetPulseLevel(0); // [Fix C2]
+                                    }
+                                }}
+                                reducedMotion={prefersReducedMotion}
+                            />
                         )}
                     </AnimatePresence>
 

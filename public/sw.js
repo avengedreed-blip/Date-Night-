@@ -89,7 +89,11 @@ self.addEventListener('fetch', (event) => {
           return await fetch(request);
         } catch (err) {
           console.warn('[Reliability] SW fetch failed (non-critical):', url, err);
-          return Response.error();
+          const cachedFallback = await caches.match(request) || await caches.match('/index.html'); // [Fix H3]
+          if (cachedFallback) {
+            return cachedFallback; // [Fix H3]
+          }
+          return new Response('', { status: 200, headers: { 'Content-Type': 'text/plain' } }); // [Fix H3]
         }
       })()
     );
