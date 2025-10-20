@@ -126,4 +126,13 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     // DIAGNOSTIC: notify unsupported browsers as before
     alert("Unsupported browser for full experience.");
   }
+  // PWA: force update on each load
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        // PWA: trigger update to pick up latest assets.
+        reg.update();
+      })
+      .catch(() => {});
+  }
 }

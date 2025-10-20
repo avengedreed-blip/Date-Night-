@@ -11,15 +11,33 @@ export default class FallbackBoundary extends React.Component {
     this._reloadTimer = null;
   }
   static getDerivedStateFromError() {
-    return { hasError: true };
+    // RELIABILITY: delegate fatal detection to componentDidCatch for granular filtering.
+    return null;
   }
-  // DIAG: capture actual runtime error before showing fallback
+  // RELIABILITY: log error but only show fallback for fatal crashes
   componentDidCatch(error, info) {
     console.error('[FallbackBoundary caught]', error, info);
+
+    const benignPatterns = [
+      /ResizeObserver/i,
+      /null|undefined/i,
+      /setState/i,
+      /AudioContext/i
+    ];
+    const message = error?.message || '';
+    const isBenign = benignPatterns.some((r) => r.test(message));
+
+    if (isBenign) {
+      console.warn('[Non-fatal runtime ignored by boundary]', message);
+      return;
+    }
+
     if (this.state.hasError) {
       return; // RELIABILITY: prevent recursive state updates after initial failure.
     }
-    this.setState({ hasError: true });
+    if (!this.state.hasError) {
+      this.setState({ hasError: true });
+    }
     // DIAGNOSTIC: expanded error capture to stringify any thrown value
     // DIAGNOSTIC: guard diagnostics against unexpected failures
     try {

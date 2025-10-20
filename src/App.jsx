@@ -1861,11 +1861,60 @@ function App() {
 
     // Use the new prompt queue hook
     const { modalState, setModalState: setModalStateUnsafe, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
+    // RELIABILITY: guard modal state updates scheduled after async delays.
     const safeSetModalState = useCallback((next) => {
         if (isMounted.current) {
             setModalStateUnsafe(next);
         }
-    }, [setModalStateUnsafe]); // RELIABILITY: wrap modal state updates to avoid unmounted writes.
+    }, [setModalStateUnsafe]);
+    // RELIABILITY: guard script loader status transitions triggered by deferred callbacks.
+    const safeSetScriptLoadState = useCallback((next) => {
+        if (isMounted.current) {
+            setScriptLoadState(next);
+        }
+    }, [setScriptLoadState]);
+    // RELIABILITY: guard onboarding unlock flags updated from async flows.
+    const safeSetIsUnlockingAudio = useCallback((next) => {
+        if (isMounted.current) {
+            setIsUnlockingAudio(next);
+        }
+    }, [setIsUnlockingAudio]);
+    // RELIABILITY: guard audio failure flags to avoid writes after teardown.
+    const safeSetAudioInitFailed = useCallback((next) => {
+        if (isMounted.current) {
+            setAudioInitFailed(next);
+        }
+    }, [setAudioInitFailed]);
+    // RELIABILITY: guard game state transitions invoked from timers.
+    const safeSetGameState = useCallback((next) => {
+        if (isMounted.current) {
+            setGameState(next);
+        }
+    }, [setGameState]);
+    // RELIABILITY: guard secret round unlock toggles invoked asynchronously.
+    const safeSetSecretRoundUsed = useCallback((next) => {
+        if (isMounted.current) {
+            setSecretRoundUsed(next);
+        }
+    }, [setSecretRoundUsed]);
+    // RELIABILITY: guard sticky theme toggles when closing secret rounds.
+    const safeSetSecretSticky = useCallback((next) => {
+        if (isMounted.current) {
+            setSecretSticky(next);
+        }
+    }, [setSecretSticky]);
+    // RELIABILITY: guard secret theme unlock flag changes across async flows.
+    const safeSetIsSecretThemeUnlocked = useCallback((next) => {
+        if (isMounted.current) {
+            setIsSecretThemeUnlocked(next);
+        }
+    }, [setIsSecretThemeUnlocked]);
+    // RELIABILITY: guard pulse level adjustments scheduled from timers.
+    const safeSetPulseLevel = useCallback((next) => {
+        if (isMounted.current) {
+            setPulseLevel(next);
+        }
+    }, [setPulseLevel]);
     const setModalState = safeSetModalState; // RELIABILITY: reuse safe setter across existing call sites.
     const modalStateRef = useRef(modalState); // Keep ref for legacy dependencies if any
 
@@ -1884,7 +1933,7 @@ function App() {
 
     const mainContentRef = useRef(null); // INTERACT: track gameplay container for selective inerting
 
-    // RELIABILITY: safe inert handling on main content to avoid stale attribute leaks
+    // RELIABILITY: safe inert toggling to avoid null refs on unmount
     useEffect(() => {
         const el = mainContentRef?.current;
         if (!el) return;
@@ -1895,14 +1944,12 @@ function App() {
                 el.removeAttribute('inert');
             }
         } catch (err) {
-            console.warn('[Inert assignment skipped]', err);
+            console.warn('[Inert toggle skipped]', err);
         }
         return () => {
             try {
                 const node = mainContentRef?.current;
-                if (node && node.hasAttribute('inert')) {
-                    node.removeAttribute('inert');
-                }
+                if (node && node.hasAttribute('inert')) node.removeAttribute('inert');
             } catch (err) {
                 console.warn('[Inert cleanup skipped]', err);
             }
@@ -2019,14 +2066,10 @@ function App() {
         }
     }, []);
 
-    // VISUAL: compute RGB for gradient transparency
+    // VISUAL: derive RGB from theme accent for dynamic glow
     function hexToRgb(hex) {
-        const parsed = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return parsed ? {
-            r: parseInt(parsed[1], 16),
-            g: parseInt(parsed[2], 16),
-            b: parseInt(parsed[3], 16)
-        } : null;
+        const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return match ? `${parseInt(match[1], 16)}, ${parseInt(match[2], 16)}, ${parseInt(match[3], 16)}` : '255,255,255';
     }
 
     // RELIABILITY: ensure full theme propagation including background sync
@@ -2042,10 +2085,7 @@ function App() {
         if (theme.highlight) {
             root.style.setProperty('--theme-highlight', theme.highlight);
             // VISUAL: provide highlight RGB for ambient glow animation.
-            const highlightRgb = hexToRgb(theme.highlight);
-            if (highlightRgb) {
-                root.style.setProperty('--theme-highlight-rgb', `${highlightRgb.r}, ${highlightRgb.g}, ${highlightRgb.b}`);
-            }
+            root.style.setProperty('--theme-highlight-rgb', hexToRgb(theme.highlight));
         } else {
             // VISUAL: clear highlight RGB when theme omits highlight tone.
             root.style.removeProperty('--theme-highlight-rgb');
@@ -2053,10 +2093,7 @@ function App() {
         if (theme.accent) {
             root.style.setProperty('--theme-accent', theme.accent);
             // VISUAL: expose accent RGB for parallax gradient transparency.
-            const rgb = hexToRgb(theme.accent);
-            if (rgb) {
-                root.style.setProperty('--theme-accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
-            }
+            root.style.setProperty('--theme-accent-rgb', hexToRgb(theme.accent));
         } else {
             // VISUAL: clear accent RGB token when accent is undefined.
             root.style.removeProperty('--theme-accent-rgb');
@@ -2149,11 +2186,12 @@ function App() {
         clearTimeout(turnIntroTimeoutRef.current);
         if (gameState === 'turnIntro') {
             turnIntroTimeoutRef.current = setTimeout(() => {
-                setGameState('playing');
+                // RELIABILITY: guard delayed turn transition against unmounted updates.
+                safeSetGameState('playing');
             }, 2800);
         }
         return () => clearTimeout(turnIntroTimeoutRef.current);
-    }, [gameState]);
+    }, [gameState, safeSetGameState]);
 
     const safeOpenModal = useCallback((type, data = {}) => {
         if (type === 'secretPrompt') {
@@ -2168,19 +2206,25 @@ function App() {
     useEffect(() => {
         if (typeof window === 'undefined' || typeof document === 'undefined') { return undefined; } // RELIABILITY: Skip Tone script injection in non-browser contexts.
         if (window.Tone) {
-            setScriptLoadState('loaded');
+            // RELIABILITY: guard Tone bootstrap flag when script already available.
+            safeSetScriptLoadState('loaded');
             return undefined;
         }
         const script = document.createElement('script');
         script.src = "https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js";
         script.async = true;
         script.onload = () => {
-            if (window.Tone) setScriptLoadState('loaded');
+            // RELIABILITY: ensure script callbacks abort post-unmount.
+            if (!isMounted.current) return;
+            if (window.Tone) safeSetScriptLoadState('loaded');
         };
-        script.onerror = () => setScriptLoadState('error');
+        script.onerror = () => {
+            // RELIABILITY: guard error propagation for deferred script load failures.
+            safeSetScriptLoadState('error');
+        };
         document.body.appendChild(script);
         return () => { if (script.parentNode) script.parentNode.removeChild(script); };
-    }, []); // RELIABILITY: install Tone script loader once per component lifecycle.
+    }, [safeSetScriptLoadState]); // RELIABILITY: install Tone script loader once per component lifecycle.
 
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
@@ -2301,7 +2345,7 @@ function App() {
 
         const attemptAudioInit = async () => {
             if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
-                setScriptLoadState('error'); // RELIABILITY: Surface loading issues when Tone is unavailable.
+                safeSetScriptLoadState('error'); // RELIABILITY: Surface loading issues when Tone is unavailable.
                 return false; // RELIABILITY: Abort initialization when Tone context missing.
             }
             try {
@@ -2321,18 +2365,21 @@ function App() {
             const success = await attemptAudioInit();
             if (!success) {
                 setTimeout(async () => {
+                    // RELIABILITY: verify mount state before retrying audio unlock.
+                    if (!isMounted.current) return;
                     const retrySuccess = await attemptAudioInit();
-                    if (!retrySuccess) setAudioInitFailed(true);
+                    if (!retrySuccess) safeSetAudioInitFailed(true);
                 }, 1000);
             }
         } catch (err) {
             console.error("Audio init failed:", err);
-            setAudioInitFailed(true);
+            safeSetAudioInitFailed(true);
         } finally {
-            setGameState('onboarding_intro');
-            setIsUnlockingAudio(false);
+            // RELIABILITY: guard final onboarding state writes during teardown.
+            safeSetGameState('onboarding_intro');
+            safeSetIsUnlockingAudio(false);
         }
-    }, [isUnlockingAudio, audioEngine]);
+    }, [isUnlockingAudio, audioEngine, safeSetScriptLoadState, safeSetAudioInitFailed, safeSetGameState, safeSetIsUnlockingAudio]);
 
     const handleNameEntry = useCallback((playerNames) => { 
         setPlayers(playerNames); 
@@ -2352,6 +2399,8 @@ function App() {
         const activePlayerName = players[nextPlayerId];
 
         setTimeout(() => {
+            // RELIABILITY: verify mount state before secret round transitions.
+            if (!isMounted.current) return;
             // RELIABILITY: safely normalize active player name before comparisons
             const normalizedActivePlayerName = typeof activePlayerName === 'string' ? activePlayerName.toLowerCase() : '';
             // [GeminiFix: NullGuard]
@@ -2361,12 +2410,12 @@ function App() {
                 !secretRoundUsed &&
                 Math.random() < 0.15
             ) {
-                setSecretRoundUsed(true);
+                safeSetSecretRoundUsed(true);
                 const secretPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)];
-                setGameState("secretLoveRound");
+                safeSetGameState("secretLoveRound");
                 handleThemeChange("foreverPromise");
-                setSecretSticky(true);
-                setIsSecretThemeUnlocked(true);
+                safeSetSecretSticky(true);
+                safeSetIsSecretThemeUnlocked(true);
                 safeOpenModal("secretPrompt", { prompt: secretPrompt });
             }
         }, 100);
@@ -2393,10 +2442,10 @@ function App() {
         const newPulseLevel = Math.min(pulseLevel + increment, 100);
 
         if (newPulseLevel >= 100 && !isExtremeMode) {
-             setPendingExtremeRound('spark');
-             setPulseLevel(100);
+            setPendingExtremeRound('spark');
+            safeSetPulseLevel(100);
         } else {
-            setPulseLevel(newPulseLevel);
+            safeSetPulseLevel(newPulseLevel);
         }
     
         if (!isExtremeMode && newPulseLevel < 100 && Math.random() < 0.1) {
@@ -2406,7 +2455,7 @@ function App() {
                 triggerExtremeRound('random');
             }
         }
-    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal, isSecretThemeUnlocked]);
+    }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal, isSecretThemeUnlocked, safeSetSecretRoundUsed, safeSetGameState, safeSetSecretSticky, safeSetIsSecretThemeUnlocked, safeSetPulseLevel]);
     
     const handleCloseModal = useCallback(() => {
         audioEngine.playModalClose();
@@ -2442,13 +2491,16 @@ function App() {
         if (!isExtremeMode) { // GAMELOGIC: guard against duplicate extreme activation in same round
             setIsExtremeMode(true); // GAMELOGIC: activate extreme flag for current round
             handleThemeChange('crimsonFrenzy'); // GAMELOGIC: shift theme into extreme palette once per round
-            setGameState("extremeRound"); // GAMELOGIC: enter extreme round state machine
+            safeSetGameState("extremeRound"); // RELIABILITY: guard extreme round transition when modal closes asynchronously
             setExtremeModeReady(true); // GAMELOGIC: mark extreme prompt pipeline ready
         }
         if (extremeRoundSource === 'spark' && (roundCount + 1) % 5 === 0) {
-            setTimeout(() => setPulseLevel(0), 1000);
+            setTimeout(() => {
+                // RELIABILITY: guard spark reset pulse against unmounted component.
+                safeSetPulseLevel(0);
+            }, 1000);
         }
-    }, [extremeRoundSource, roundCount, handleThemeChange, setModalState, isExtremeMode]);
+    }, [extremeRoundSource, roundCount, handleThemeChange, setModalState, isExtremeMode, safeSetGameState, safeSetPulseLevel]);
 
     const pickPrompt = useCallback((category, list) => {
         // DIAGNOSTIC: validate prompt selection inputs before accessing caches
@@ -2569,6 +2621,8 @@ function App() {
         const text = filteredList.length > 0 ? filteredList[Math.floor(Math.random() * filteredList.length)] : "Add consequences in the editor!";
 
         setTimeout(() => {
+            // RELIABILITY: ensure consequence modal reopen skips after unmount.
+            if (!isMounted.current) return;
             safeOpenModal('consequence', { text });
         }, 50);
         pendingPromptRef.current = null;
