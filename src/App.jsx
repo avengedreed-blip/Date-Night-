@@ -1731,6 +1731,12 @@ function App() {
     const dbStore = useMemo(() => getDbStore(), []); // RELIABILITY: Capture prompt store lazily once App is evaluating.
     const audioEngine = useMemo(() => getAudioEngineInstance(), []); // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
     const legacyPromptSnapshotRef = useRef(null); // RELIABILITY: Track legacy prompt payloads across asynchronous migrations.
+    const isMounted = useRef(true); // RELIABILITY: track component mount lifecycle for guarded state updates.
+
+    useEffect(() => {
+        // RELIABILITY: flag unmount to prevent post-teardown state writes.
+        return () => { isMounted.current = false; };
+    }, []);
 
     // RELIABILITY: async init for audio engine after mount
     useEffect(() => {
@@ -1854,7 +1860,13 @@ function App() {
     }, [dbStore]);
 
     // Use the new prompt queue hook
-    const { modalState, setModalState, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
+    const { modalState, setModalState: setModalStateUnsafe, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
+    const safeSetModalState = useCallback((next) => {
+        if (isMounted.current) {
+            setModalStateUnsafe(next);
+        }
+    }, [setModalStateUnsafe]); // RELIABILITY: wrap modal state updates to avoid unmounted writes.
+    const setModalState = safeSetModalState; // RELIABILITY: reuse safe setter across existing call sites.
     const modalStateRef = useRef(modalState); // Keep ref for legacy dependencies if any
 
     useLayoutEffect(() => {
@@ -1872,27 +1884,29 @@ function App() {
 
     const mainContentRef = useRef(null); // INTERACT: track gameplay container for selective inerting
 
-    // INTERACT: only inert the main gameplay content, never the modal subtree
-    // INTERACT: safely manage inert on main content to prevent null deref after modal close
+    // RELIABILITY: safe inert handling on main content to avoid stale attribute leaks
     useEffect(() => {
-      const el = mainContentRef?.current;
-      if (!el) return;
-
-      if (modalState?.type) {
-        el.setAttribute('inert', '');
-      } else {
-        el.removeAttribute('inert');
-      }
-
-      // RELIABILITY: guarded cleanup avoids crashes during unmount or async state updates
-      return () => {
+        const el = mainContentRef?.current;
+        if (!el) return;
         try {
-          const node = mainContentRef?.current;
-          if (node && node.hasAttribute('inert')) node.removeAttribute('inert');
+            if (modalState?.type) {
+                el.setAttribute('inert', '');
+            } else {
+                el.removeAttribute('inert');
+            }
         } catch (err) {
-          console.warn('[Modal inert cleanup skipped safely]', err);
+            console.warn('[Inert assignment skipped]', err);
         }
-      };
+        return () => {
+            try {
+                const node = mainContentRef?.current;
+                if (node && node.hasAttribute('inert')) {
+                    node.removeAttribute('inert');
+                }
+            } catch (err) {
+                console.warn('[Inert cleanup skipped]', err);
+            }
+        };
     }, [modalState?.type]);
 
     const promptQueueStateRef = useRef(queueState);
@@ -2005,6 +2019,16 @@ function App() {
         }
     }, []);
 
+    // VISUAL: compute RGB for gradient transparency
+    function hexToRgb(hex) {
+        const parsed = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return parsed ? {
+            r: parseInt(parsed[1], 16),
+            g: parseInt(parsed[2], 16),
+            b: parseInt(parsed[3], 16)
+        } : null;
+    }
+
     // RELIABILITY: ensure full theme propagation including background sync
     useEffect(() => {
         if (typeof document === 'undefined') return;
@@ -2017,9 +2041,25 @@ function App() {
         }
         if (theme.highlight) {
             root.style.setProperty('--theme-highlight', theme.highlight);
+            // VISUAL: provide highlight RGB for ambient glow animation.
+            const highlightRgb = hexToRgb(theme.highlight);
+            if (highlightRgb) {
+                root.style.setProperty('--theme-highlight-rgb', `${highlightRgb.r}, ${highlightRgb.g}, ${highlightRgb.b}`);
+            }
+        } else {
+            // VISUAL: clear highlight RGB when theme omits highlight tone.
+            root.style.removeProperty('--theme-highlight-rgb');
         }
         if (theme.accent) {
             root.style.setProperty('--theme-accent', theme.accent);
+            // VISUAL: expose accent RGB for parallax gradient transparency.
+            const rgb = hexToRgb(theme.accent);
+            if (rgb) {
+                root.style.setProperty('--theme-accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+            }
+        } else {
+            // VISUAL: clear accent RGB token when accent is undefined.
+            root.style.removeProperty('--theme-accent-rgb');
         }
 
         // RELIABILITY: trigger repaint for main container background sync
@@ -2368,28 +2408,28 @@ function App() {
         }
     }, [isExtremeMode, roundCount, pulseLevel, isSpinInProgress, modalState.type, triggerExtremeRound, players, currentPlayer, handleThemeChange, gameState, secretRoundUsed, secretSticky, safeOpenModal, isSecretThemeUnlocked]);
     
-    const closeModal = useCallback(() => {
+    const handleCloseModal = useCallback(() => {
         audioEngine.playModalClose();
         // RELIABILITY: debounce modal close to avoid race between exit animation and unmount
         setTimeout(() => {
-            setModalState({ type: "", data: null });
+            safeSetModalState({ type: "", data: null });
         }, 150);
     // RELIABILITY: Capture lazy audio engine reference for modal close sfx.
-    }, [setModalState, audioEngine]);
+    }, [safeSetModalState, audioEngine]);
 
     const handlePromptModalClose = useCallback(() => {
-        closeModal();
+        handleCloseModal();
         dispatchQueue({ type: 'UNLOCK' });
         pendingPromptRef.current = null;
         endRoundAndStartNew();
-    }, [closeModal, endRoundAndStartNew, dispatchQueue]);
+    }, [handleCloseModal, endRoundAndStartNew, dispatchQueue]);
 
     const handleConsequenceClose = useCallback(() => {
-        closeModal();
+        handleCloseModal();
         dispatchQueue({ type: 'UNLOCK' });
         pendingPromptRef.current = null;
         endRoundAndStartNew();
-    }, [closeModal, endRoundAndStartNew, dispatchQueue]);
+    }, [handleCloseModal, endRoundAndStartNew, dispatchQueue]);
 
     const handleSecretLoveRoundClose = useCallback(() => {
         setModalState({ type: "", data: null });
@@ -2543,10 +2583,10 @@ function App() {
         if (modalState.data?.from === 'settings') {
              setModalState({ type: 'settings', data: null });
         } else {
-             closeModal();
+             handleCloseModal();
         }
     // RELIABILITY: Ensure lazy audio engine dependency captured for editor confirmation.
-    }, [updatePrompts, modalState.data, closeModal, setModalState, audioEngine]);
+    }, [updatePrompts, modalState.data, handleCloseModal, setModalState, audioEngine]);
 
     const handleConfirmReset = useCallback(() => {
         audioEngine.playRefuse();
