@@ -6,19 +6,9 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const bootstrap = async () => {
     // DIAGNOSTIC: define logging helper for console and DOM
     const log = (msg) => {
-      // DIAGNOSTIC: emit to console with [BOOT] prefix
-      console.log('[BOOT]', msg);
-      // DIAGNOSTIC: attempt to mirror log visibly in DOM
-      try {
-        // DIAGNOSTIC: create visual log element
-        const el = document.createElement('div');
-        // DIAGNOSTIC: assign message text
-        el.textContent = msg;
-        // DIAGNOSTIC: apply minimal styling for readability
-        el.style.cssText = 'color:#0f0;font-family:monospace;font-size:12px;';
-        // DIAGNOSTIC: append log element to body
-        document.body.appendChild(el);
-      } catch {}
+      if (import.meta.env?.DEV) {
+        console.log('[BOOT]', msg); // [Fix B1] Limit bootstrap logging to development console only
+      }
     };
 
     try {

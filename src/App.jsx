@@ -15,6 +15,7 @@ import { getDbStoreInstance } from './utils/promptStoreCore.js'; // RELIABILITY:
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 // RELIABILITY: then load core engine (lazy async Tone)
 import { getAudioEngine, resumeAudioOnGesture } from './core/audioCore.js';
+import * as Tone from 'tone'; // [Fix F1/E1] Ensure Tone is bundled locally without CDN
 
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
 const safeUUID = () => {
@@ -33,6 +34,10 @@ const scheduleMicrotask = (fn) => {
   }
   Promise.resolve().then(fn);
 };
+
+if (typeof globalThis !== 'undefined' && !globalThis.Tone) {
+  globalThis.Tone = Tone; // [Fix F1/E1] Expose bundled Tone on the global scope for legacy access
+}
 
 // Registry to suppress click immediately after a secret round opens
 const secretPromptOpenAt = { t: 0 };
@@ -267,17 +272,6 @@ const useLocalStoragePrompts = () => {
         (async () => {
             try {
                 const stored = await dbStore.getPrompt('prompts');
-
-// VISUAL: soft crossfade on mount to smooth background appearance
-useEffect(() => {
-  const el = document.getElementById('app-content') || document.body;
-  if (!el) return;
-  try {
-    el.style.transition = 'background 0.6s ease-in-out, opacity 0.5s ease-in-out';
-    el.style.opacity = '0.85';
-    requestAnimationFrame(() => { el.style.opacity = '1'; });
-  } catch {}
-}, []);
                 if (stored) {
                     const normalized = normalizeStoredPrompts(stored);
                     if (isActive) {
@@ -320,6 +314,16 @@ useEffect(() => {
             isActive = false;
         };
     }, [dbStore]);
+
+    useEffect(() => { // [Fix A1] Ensure fade effect runs within hook scope
+        const el = document.getElementById('app-content') || document.body;
+        if (!el) return;
+        try {
+            el.style.transition = 'background 0.6s ease-in-out, opacity 0.5s ease-in-out';
+            el.style.opacity = '0.85';
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+        } catch {}
+    }, []);
 
     // RELIABILITY: Keep prompts persisted when mutated.
     const updatePrompts = (newPrompts) => {
@@ -2206,28 +2210,14 @@ function App() {
         setModalState({ type, data });
       }, [setModalState]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof document === 'undefined') { return undefined; } // RELIABILITY: Skip Tone script injection in non-browser contexts.
-        if (window.Tone) {
-            // RELIABILITY: guard Tone bootstrap flag when script already available.
-            safeSetScriptLoadState('loaded');
+    useEffect(() => { // [Fix F1/E1] Mark Tone as loaded without DOM script injection
+        if (typeof window === 'undefined') {
             return undefined;
         }
-        const script = document.createElement('script');
-        script.src = "https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js";
-        script.async = true;
-        script.onload = () => {
-            // RELIABILITY: ensure script callbacks abort post-unmount.
-            if (!isMounted.current) return;
-            if (window.Tone) safeSetScriptLoadState('loaded');
-        };
-        script.onerror = () => {
-            // RELIABILITY: guard error propagation for deferred script load failures.
-            safeSetScriptLoadState('error');
-        };
-        document.body.appendChild(script);
-        return () => { if (script.parentNode) script.parentNode.removeChild(script); };
-    }, [safeSetScriptLoadState]); // RELIABILITY: install Tone script loader once per component lifecycle.
+        window.Tone = window.Tone || Tone;
+        safeSetScriptLoadState('loaded');
+        return undefined;
+    }, [safeSetScriptLoadState]);
 
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {

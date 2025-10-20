@@ -24,7 +24,18 @@ const writeBrowserFallback = (key, value) => { // RELIABILITY: Guarded localStor
 export function createPromptStore() {
   return {
     async getPrompt(key) {
-      return await get(key);
+      try {
+        return await get(key);
+      } catch (err) {
+        console.warn('[Reliability] IndexedDB read failed, using fallback:', err); // [Fix H1]
+        try {
+          const raw = memoryFallback[key];
+          return typeof raw === 'string' ? JSON.parse(raw) : undefined;
+        } catch (parseErr) {
+          console.warn('[Reliability] Fallback prompt parse failed:', parseErr); // [Fix H1]
+          return undefined;
+        }
+      }
     },
     async setPrompt(key, value) {
       try {
@@ -32,7 +43,7 @@ export function createPromptStore() {
       } catch (err) {
         // RELIABILITY: Preserve legacy fallback semantics when IndexedDB fails.
         console.warn('[Reliability] IndexedDB write failed, fallback to memory:', err);
-        writeBrowserFallback(key, value);
+        writeBrowserFallback(key, value); // [Fix H1]
       }
     },
     async removePrompt(key) {

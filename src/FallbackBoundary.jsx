@@ -18,9 +18,8 @@ export default class FallbackBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.error('[FallbackBoundary caught]', error, info);
 
-    const benignPatterns = [
+    const benignPatterns = [ // [Fix C1] Limit benign filter to known non-fatal errors
       /ResizeObserver/i,
-      /null|undefined/i,
       /setState/i,
       /AudioContext/i
     ];

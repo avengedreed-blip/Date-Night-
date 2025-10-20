@@ -72,9 +72,11 @@ self.addEventListener('fetch', (event) => {
           return net;
         } catch (err) {
           console.warn('[Reliability] SW fetch failed:', url, err);
-          const cached = await caches.match(request);
-          // RELIABILITY: graceful fallback response if nothing cached
-          return cached || Response.error();
+          const cached = await caches.match(request) || await caches.match('/index.html'); // [Fix F2] Provide offline document fallback
+          if (cached) {
+            return cached;
+          }
+          return new Response('<h1>Offline</h1>', { headers: { 'Content-Type': 'text/html' } }); // [Fix F2] Serve minimal offline shell
         }
       })()
     );
