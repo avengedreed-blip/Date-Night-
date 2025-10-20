@@ -6,18 +6,64 @@ import { get, set, del, clear, keys } from 'idb-keyval';
 const hasBrowserStorage = () => typeof localStorage !== 'undefined'; // RELIABILITY: Shared guard helpers for browser storage fallbacks.
 
 const memoryFallback = {}; // RELIABILITY: In-memory persistence when localStorage is unavailable.
+const COOKIE_PREFIX = 'dn_prompt_'; // [Fix H1]
 
-const writeBrowserFallback = (key, value) => { // RELIABILITY: Guarded localStorage writes with memory fallback.
-  if (hasBrowserStorage()) { // RELIABILITY: localStorage available branch.
-    try { // RELIABILITY: Preserve error diagnostics for storage quota failures.
-      localStorage.setItem(key, JSON.stringify(value)); // RELIABILITY: Persist serialized prompt payload for legacy callers.
-    } catch (err) { // RELIABILITY: Capture storage exceptions for debugging visibility.
-      console.warn('[Reliability] LocalStorage fallback write failed:', err); // RELIABILITY: Log guard for observability.
-      memoryFallback[key] = JSON.stringify(value); // RELIABILITY: Record value in memory fallback when disk quota is hit.
-    }
-    return; // RELIABILITY: Exit after attempting browser storage write path.
+const persistCookieFallback = (key, serialized) => { // [Fix H1]
+  if (typeof document === 'undefined') {
+    memoryFallback[key] = serialized;
+    return;
   }
-  memoryFallback[key] = JSON.stringify(value); // RELIABILITY: Store serialized prompts in memory when localStorage is missing.
+  try {
+    document.cookie = `${COOKIE_PREFIX}${encodeURIComponent(key)}=${encodeURIComponent(serialized)};path=/;max-age=31536000;SameSite=Lax`; // [Fix H1]
+  } catch (err) {
+    console.warn('[Reliability] Cookie fallback write failed:', err); // [Fix H1]
+    memoryFallback[key] = serialized;
+  }
+};
+
+const persistFallback = (key, value) => { // [Fix H1]
+  const serialized = JSON.stringify(value);
+  if (hasBrowserStorage()) {
+    try {
+      localStorage.setItem(key, serialized); // [Fix H1]
+      return;
+    } catch (err) {
+      console.warn('[Reliability] LocalStorage fallback write failed:', err); // [Fix H1]
+    }
+  }
+  persistCookieFallback(key, serialized); // [Fix H1]
+};
+
+const readFallback = (key) => { // [Fix H1]
+  if (hasBrowserStorage()) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (typeof raw === 'string') {
+        return JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn('[Reliability] LocalStorage fallback read failed:', err); // [Fix H1]
+    }
+  }
+  if (typeof document !== 'undefined') {
+    try {
+      const target = `${COOKIE_PREFIX}${encodeURIComponent(key)}=`;
+      const cookie = document.cookie.split(';').map((c) => c.trim()).find((entry) => entry.startsWith(target));
+      if (cookie) {
+        const value = decodeURIComponent(cookie.substring(target.length));
+        return JSON.parse(value);
+      }
+    } catch (err) {
+      console.warn('[Reliability] Cookie fallback read failed:', err); // [Fix H1]
+    }
+  }
+  try {
+    const rawMemory = memoryFallback[key];
+    return typeof rawMemory === 'string' ? JSON.parse(rawMemory) : undefined;
+  } catch (err) {
+    console.warn('[Reliability] Memory fallback parse failed:', err); // [Fix H1]
+    return undefined;
+  }
 };
 
 // RELIABILITY: Hoisted factory keeps prompt store creation reusable across modules.
@@ -25,17 +71,14 @@ export function createPromptStore() {
   return {
     async getPrompt(key) {
       try {
-        return await get(key);
+        const value = await get(key);
+        if (value !== undefined) {
+          return value;
+        }
       } catch (err) {
         console.warn('[Reliability] IndexedDB read failed, using fallback:', err); // [Fix H1]
-        try {
-          const raw = memoryFallback[key];
-          return typeof raw === 'string' ? JSON.parse(raw) : undefined;
-        } catch (parseErr) {
-          console.warn('[Reliability] Fallback prompt parse failed:', parseErr); // [Fix H1]
-          return undefined;
-        }
       }
+      return readFallback(key); // [Fix H1]
     },
     async setPrompt(key, value) {
       try {
@@ -43,7 +86,7 @@ export function createPromptStore() {
       } catch (err) {
         // RELIABILITY: Preserve legacy fallback semantics when IndexedDB fails.
         console.warn('[Reliability] IndexedDB write failed, fallback to memory:', err);
-        writeBrowserFallback(key, value); // [Fix H1]
+        persistFallback(key, value); // [Fix H1]
       }
     },
     async removePrompt(key) {

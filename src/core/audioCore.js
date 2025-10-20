@@ -205,9 +205,26 @@ const createAudioEngine = () => {
     async initialize() {
       if (isInitialized || !window.Tone) return false;
       try {
-        await ensureAudioUnlocked();
+        const ToneNS = window.Tone; // [Fix C1]
+        for (let attempt = 0; attempt < 3 && ToneNS?.context?.state !== 'running'; attempt += 1) { // [Fix C1]
+          await ensureAudioUnlocked(); // [Fix C1]
+          if (ToneNS?.context?.state !== 'running' && ToneNS?.context?.resume) {
+            try {
+              await ToneNS.context.resume(); // [Fix C1]
+            } catch (resumeErr) {
+              console.warn('[Reliability] Tone resume attempt failed:', resumeErr); // [Fix C1]
+            }
+          }
+          if (ToneNS?.context?.state !== 'running') {
+            await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1))); // [Fix C1]
+          }
+        }
+        if (ToneNS?.context?.state !== 'running') {
+          console.warn('[Reliability] Tone context stalled before init.'); // [Fix C1]
+          return false; // [Fix C1]
+        }
 
-        const ctx = window.Tone.getContext();
+        const ctx = ToneNS.getContext();
         if (ctx.rawContext) {
           window.Tone.context.lookAhead = 0.03;
           window.Tone.Transport.lookAhead = 0.03;

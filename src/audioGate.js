@@ -5,10 +5,17 @@ const getTone = () => (typeof window !== 'undefined' ? window.Tone : null);
 
 // RELIABILITY: Global flag to track unlock status
 let audioUnlocked = false;
+let detachGestureListeners; // [Fix M2]
+let listenersAttached = false; // [Fix M2]
 
 // RELIABILITY: Gesture-based unlock listener
 export const attachAudioGestureListeners = () => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return () => {};
+  if (listenersAttached && typeof detachGestureListeners === 'function') {
+    return detachGestureListeners; // [Fix M2]
+  }
+
+  const events = ['pointerdown', 'touchstart', 'click']; // [Fix M2]
 
   const resumeAudio = async () => {
     try {
@@ -24,15 +31,20 @@ export const attachAudioGestureListeners = () => {
       console.warn('[Reliability] Tone resume failed:', err);
     }
     if (audioUnlocked) {
-      ['pointerdown', 'touchstart', 'click'].forEach((ev) =>
-        window.removeEventListener(ev, resumeAudio, true)
-      );
+      detach(); // [Fix M2]
     }
   };
 
-  ['pointerdown', 'touchstart', 'click'].forEach((ev) =>
-    window.addEventListener(ev, resumeAudio, true)
-  );
+  const detach = () => {
+    events.forEach((ev) => window.removeEventListener(ev, resumeAudio, true));
+    listenersAttached = false; // [Fix M2]
+    detachGestureListeners = undefined; // [Fix M2]
+  };
+
+  events.forEach((ev) => window.addEventListener(ev, resumeAudio, true));
+  listenersAttached = true; // [Fix M2]
+  detachGestureListeners = detach; // [Fix M2]
+  return detach;
 };
 
 // RELIABILITY: Optional helpers, same lazy Tone pattern
