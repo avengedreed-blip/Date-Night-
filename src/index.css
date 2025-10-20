@@ -156,26 +156,39 @@ body, #app-content {
     linear-gradient(180deg, rgba(60,20,120,0.9), rgba(30,10,80,0.95));
 }
 
-/* VISUAL: parallax behind everything, transparent alpha */
+/* VISUAL: parallax background with softer opacity and animated glow */
 #parallax-bg {
-  position: fixed; /* VISUAL: anchor gradient plane to viewport */
-  inset: 0; /* VISUAL: cover entire screen */
-  z-index: 0; /* VISUAL: ensure base layer depth */
-  pointer-events: none; /* INTERACT: keep parallax from intercepting input */
-  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.15) 0%, transparent 70%); /* VISUAL: maintain softened gradient */
-  opacity: 0.08; /* VISUAL: gentle intensity */
-  mix-blend-mode: lighten; /* VISUAL: blend with themes */
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-accent-rgb),0.15) 0%, transparent 80%);
+  opacity: 0.25;
+  mix-blend-mode: screen;
+  animation: bgPulse 12s ease-in-out infinite alternate;
 }
 
-/* VISUAL: glow above parallax, still non-interactive */
+/* VISUAL: ambient glow stronger, smooth fade */
 #ambient-glow {
-  position: fixed; /* VISUAL: lock glow to viewport */
-  inset: 0; /* VISUAL: span full screen */
-  z-index: 1; /* VISUAL: layer glow above parallax */
-  pointer-events: none; /* INTERACT: keep glow inert */
-  background: radial-gradient(circle at 50% 60%, rgba(var(--theme-highlight-rgb),0.2) 0%, transparent 70%); /* VISUAL: preserve glow gradient */
-  opacity: 0.04; /* VISUAL: subtle luminance */
-  mix-blend-mode: screen; /* VISUAL: blend highlight */
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 55%, rgba(var(--theme-highlight-rgb,255,255,255),0.12) 0%, transparent 75%);
+  mix-blend-mode: screen;
+  opacity: 0.1;
+  animation: glowShift 14s ease-in-out infinite alternate;
+}
+
+/* VISUAL: keyframes for subtle breathing motion */
+@keyframes bgPulse {
+  from { transform: scale(1); opacity: 0.2; }
+  to   { transform: scale(1.05); opacity: 0.3; }
+}
+
+@keyframes glowShift {
+  from { transform: scale(1); filter: hue-rotate(0deg); }
+  to   { transform: scale(1.04); filter: hue-rotate(20deg); }
 }
 
 /* VISUAL: particle canvas above bg/glow but below UI */

@@ -15,7 +15,10 @@ export default class FallbackBoundary extends React.Component {
   }
   // DIAG: capture actual runtime error before showing fallback
   componentDidCatch(error, info) {
-    console.error('[FallbackBoundary caught error]', error, info);
+    console.error('[FallbackBoundary caught]', error, info);
+    if (this.state.hasError) {
+      return; // RELIABILITY: prevent recursive state updates after initial failure.
+    }
     this.setState({ hasError: true });
     // DIAGNOSTIC: expanded error capture to stringify any thrown value
     // DIAGNOSTIC: guard diagnostics against unexpected failures
