@@ -47,12 +47,16 @@ export function createPromptStore() {
   };
 }
 
-let promptStoreSingleton; // RELIABILITY: deferred singleton to avoid TDZ when modules import each other.
-export const getPromptStore = () => { // RELIABILITY: Lazy getter ensures runtime initialization only.
-  if (!promptStoreSingleton) { // RELIABILITY: Instantiate store once on first access.
-    promptStoreSingleton = createPromptStore(); // RELIABILITY: Capture singleton instance lazily.
+// RELIABILITY: singleton cache shared across modules without React dependency.
+let _promptStoreSingleton;
+// RELIABILITY: safely get shared singleton
+export function getPromptStore() { // RELIABILITY: runtime guard around singleton creation
+  if (!_promptStoreSingleton) { // RELIABILITY: instantiate prompt store lazily
+    _promptStoreSingleton = createPromptStore(); // RELIABILITY: allocate shared store once
   }
-  return promptStoreSingleton; // RELIABILITY: Return memoized prompt store instance.
-};
-
-// RELIABILITY: remove eager singleton export to prevent TDZ re-entry.
+  return _promptStoreSingleton; // RELIABILITY: reuse cached store instance
+}
+// RELIABILITY: lazy getter used by App via storage.js
+export function getDbStoreInstance() { // RELIABILITY: neutral accessor for React surfaces
+  return getPromptStore(); // RELIABILITY: delegate to singleton getter
+}

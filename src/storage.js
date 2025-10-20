@@ -1,7 +1,9 @@
 // TRACE: module load marker
 try { console.log('[INIT]', 'storage.js'); } catch {}
-import { createPromptStore, getPromptStore } from './utils/promptStoreCore.js'; // RELIABILITY: IndexedDB prompt storage accessor only
+import { getPromptStore, getDbStoreInstance } from './utils/promptStoreCore.js'; // RELIABILITY: import from neutral core only
 
-export const getDbStore = () => getPromptStore(); // RELIABILITY: expose only the lazy getter
+export const getDbStore = () => getDbStoreInstance(); // RELIABILITY: main export for App and others
 
-export { createPromptStore }; // RELIABILITY: expose factory for isolated test instances
+export const dbStore = getPromptStore(); // RELIABILITY: legacy singleton (kept for backward compatibility)
+
+export { createPromptStore } from './utils/promptStoreCore.js'; // ARCH: keep old named exports for compatibility

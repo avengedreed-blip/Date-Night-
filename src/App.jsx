@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom'; // RELIABILITY: safe import
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 // RELIABILITY: IndexedDB prompt storage helpers.
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
-import { getDbStore } from './storage';
+import { getDbStoreInstance } from './utils/promptStoreCore.js'; // RELIABILITY: lazy access to store to avoid TDZ
 // RELIABILITY: load gesture logic first (inert)
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 // RELIABILITY: then load core engine (lazy async Tone)
@@ -259,7 +259,7 @@ const useLocalStoragePrompts = () => {
     // RELIABILITY: Track async prompt hydration status.
     const [isPromptsLoading, setIsPromptsLoading] = useState(true);
     // RELIABILITY: Acquire prompt store lazily to avoid module evaluation races.
-    const dbStore = useMemo(() => getDbStore(), []);
+    const dbStore = useMemo(() => getDbStoreInstance(), []); // RELIABILITY: lazily capture prompt store singleton
 
     // RELIABILITY: hydrate prompts from IndexedDB store on mount.
     useEffect(() => {
@@ -1728,7 +1728,10 @@ function App() {
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
-    const dbStore = useMemo(() => getDbStore(), []); // RELIABILITY: Capture prompt store lazily once App is evaluating.
+    const dbStore = useMemo(() => getDbStoreInstance(), []); // RELIABILITY: Capture prompt store lazily once App is evaluating.
+    useEffect(() => { // RELIABILITY: detect circular import regressions during runtime
+        if (!dbStore) console.error('[Diag] dbStore unresolved – potential circular import');
+    }, [dbStore]);
     const audioEngine = useMemo(() => getAudioEngineInstance(), []); // RELIABILITY: Acquire audio engine lazily during render to avoid TDZ import cycles.
     const legacyPromptSnapshotRef = useRef(null); // RELIABILITY: Track legacy prompt payloads across asynchronous migrations.
     const isMounted = useRef(true); // RELIABILITY: track component mount lifecycle for guarded state updates.
