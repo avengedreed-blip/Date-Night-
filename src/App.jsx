@@ -1174,7 +1174,12 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
         const toneReady = typeof window !== 'undefined' && !!window.Tone; // RELIABILITY: detect Tone availability before playback.
         if (toneReady) {
-            await unlockPromise;
+            const unlocked = await unlockPromise; // [Fix AUD-01] Ensure spin waits for unlock result when Tone is ready
+            if (!unlocked) {
+                spinLock.current = false; // [Fix AUD-01] Release lock when unlock fails
+                lastSpinTimeRef.current = now - 2000; // [Fix AUD-01] Allow immediate retry after failed unlock
+                return;
+            }
         }
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
@@ -2490,11 +2495,13 @@ function App() {
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
         const initialUnlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-011] Invoke unlock helper immediately on onboarding begin
+        const toneReadyPromise = window.Tone ? Promise.resolve(true) : loadTone().then(() => true).catch(() => false); // [Fix AUD-01] Prime Tone load alongside unlock gesture
         setIsUnlockingAudio(true);
         safeSetAudioInitFailed(false); // [Fix M1]
 
         const attemptAudioInit = async (unlockPromise) => {
-            if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
+            const toneReady = await toneReadyPromise; // [Fix AUD-01] Ensure Tone runtime is available before initialization
+            if (!toneReady || typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
                 safeSetScriptLoadState('error'); // [Fix C1]
                 return false; // [Fix C1]
             }
