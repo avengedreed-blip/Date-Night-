@@ -115,11 +115,49 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   }
   // PWA: force update on each load
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    const warmAssetUrls = []; // [Fix PWA-02]
+    if (import.meta.env.PROD) {
+      try {
+        const entryAssets = import.meta.glob('/src/main.jsx', { import: 'default', eager: true, query: '?url' });
+        const styleAssets = import.meta.glob('/src/index.css', { import: 'default', eager: true, query: '?url' });
+        const assetSet = new Set([
+          ...Object.values(entryAssets ?? {}),
+          ...Object.values(styleAssets ?? {}),
+        ]);
+        const normalizedAssets = new Set();
+        assetSet.forEach((url) => {
+          try {
+            const normalized = new URL(url, window.location.origin);
+            normalizedAssets.add(normalized.pathname + normalized.search);
+          } catch {
+            normalizedAssets.add(url);
+          }
+        });
+        warmAssetUrls.push(...normalizedAssets);
+      } catch (err) {
+        console.warn('[PWA] Failed to resolve asset manifest for precache warmup:', err); // [Fix PWA-02]
+      }
+    }
+
+    const postAssetManifest = (registration) => { // [Fix PWA-02]
+      if (!warmAssetUrls.length) return;
+      const controller = registration?.active || navigator.serviceWorker.controller;
+      if (controller) {
+        controller.postMessage({ type: 'CACHE_URLS', payload: warmAssetUrls });
+      }
+    };
+
     navigator.serviceWorker.ready
       .then((reg) => {
-        // PWA: trigger update to pick up latest assets.
         reg.update();
+        postAssetManifest(reg);
       })
       .catch(() => {});
+
+    if (warmAssetUrls.length) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        navigator.serviceWorker.ready.then(postAssetManifest).catch(() => {});
+      });
+    }
   }
 }
