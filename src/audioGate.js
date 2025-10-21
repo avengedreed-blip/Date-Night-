@@ -6,40 +6,33 @@ const getTone = () => (typeof window !== 'undefined' ? window.Tone : null);
 // RELIABILITY: Global flag to track unlock status
 let audioUnlocked = false;
 
-// [Fix AudioUnlock-AU-001] Centralized gesture unlock helper to avoid scattered Tone.start calls
-export const unlockAudioEngine = async () => {
-  const Tone = getTone();
-  if (!Tone?.context) {
-    console.log('[AudioUnlock] Tone context unavailable during unlock attempt');
-    return false;
-  }
-  if (audioUnlocked && Tone.context.state === 'running') {
-    console.log('[AudioUnlock] Context already running, skipping unlock');
+// [Fix AUD-01] Gesture-synchronous, idempotent unlock helper with deterministic logging
+export async function unlockAudioEngine() {
+  const tone = getTone();
+  const ctx = tone?.context;
+  if (audioUnlocked && ctx?.state === 'running') {
+    console.log('[AudioUnlock] OK');
     return true;
   }
   try {
-    if (typeof Tone.context.resume === 'function' && Tone.context.state === 'suspended') {
-      const resumeResult = Tone.context.resume();
-      if (resumeResult?.then) {
-        await resumeResult;
-      }
+    if (!ctx) {
+      throw new Error('Tone context unavailable');
     }
-    const startResult = typeof Tone.start === 'function' ? Tone.start() : null;
-    if (startResult?.then) {
-      await startResult;
+    if (ctx.state !== 'running') {
+      await ctx.resume();
     }
-    if (Tone.context.state === 'running') {
+    await tone?.start?.();
+    if (ctx.state === 'running') {
       audioUnlocked = true;
-      console.log('[AudioUnlock] Context resumed successfully');
-      return true;
     }
-    console.log('[AudioUnlock] Context did not report running state after unlock attempt');
-    return false;
-  } catch (err) {
-    console.log('[AudioUnlock] Unlock failed', err);
+    console.log('[AudioUnlock] OK');
+    return true;
+  } catch (e) {
+    audioUnlocked = false;
+    console.error('[AudioUnlock] FAIL', e);
     return false;
   }
-};
+}
 let detachGestureListeners; // [Fix M2]
 let listenersAttached = false; // [Fix M2]
 
