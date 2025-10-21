@@ -5,6 +5,41 @@ const getTone = () => (typeof window !== 'undefined' ? window.Tone : null);
 
 // RELIABILITY: Global flag to track unlock status
 let audioUnlocked = false;
+
+// [Fix AudioUnlock-AU-001] Centralized gesture unlock helper to avoid scattered Tone.start calls
+export const unlockAudioEngine = async () => {
+  const Tone = getTone();
+  if (!Tone?.context) {
+    console.log('[AudioUnlock] Tone context unavailable during unlock attempt');
+    return false;
+  }
+  if (audioUnlocked && Tone.context.state === 'running') {
+    console.log('[AudioUnlock] Context already running, skipping unlock');
+    return true;
+  }
+  try {
+    if (typeof Tone.context.resume === 'function' && Tone.context.state === 'suspended') {
+      const resumeResult = Tone.context.resume();
+      if (resumeResult?.then) {
+        await resumeResult;
+      }
+    }
+    const startResult = typeof Tone.start === 'function' ? Tone.start() : null;
+    if (startResult?.then) {
+      await startResult;
+    }
+    if (Tone.context.state === 'running') {
+      audioUnlocked = true;
+      console.log('[AudioUnlock] Context resumed successfully');
+      return true;
+    }
+    console.log('[AudioUnlock] Context did not report running state after unlock attempt');
+    return false;
+  } catch (err) {
+    console.log('[AudioUnlock] Unlock failed', err);
+    return false;
+  }
+};
 let detachGestureListeners; // [Fix M2]
 let listenersAttached = false; // [Fix M2]
 
@@ -17,21 +52,21 @@ export const attachAudioGestureListeners = () => {
 
   const events = ['pointerdown', 'touchstart', 'click']; // [Fix M2]
 
-  const resumeAudio = async () => {
-    try {
-      const Tone = getTone();
-      if (Tone?.context && Tone.context.state !== 'running') {
-        await Tone.start();
+  const resumeAudio = () => {
+    const finalize = (result) => {
+      if (result && audioUnlocked) {
+        detach(); // [Fix M2]
       }
-      if (Tone?.context?.state === 'running') {
-        audioUnlocked = true;
-        console.info('[Reliability] Audio context resumed after gesture');
+    };
+    try {
+      const outcome = unlockAudioEngine(); // [Fix AudioUnlock-AU-002] Trigger unlock directly inside gesture handler
+      if (outcome && typeof outcome.then === 'function') {
+        outcome.then(finalize);
+      } else {
+        finalize(outcome);
       }
     } catch (err) {
       console.warn('[Reliability] Tone resume failed:', err);
-    }
-    if (audioUnlocked) {
-      detach(); // [Fix M2]
     }
   };
 
@@ -51,7 +86,7 @@ export const attachAudioGestureListeners = () => {
 export const ensureAudioReady = async () => {
   const Tone = getTone();
   if (!Tone) return;
-  if (Tone.context.state !== 'running') await Tone.start();
+  await unlockAudioEngine(); // [Fix AudioUnlock-AU-003] Reuse centralized unlock flow for readiness checks
 };
 
 export const silenceToneErrors = () => { // [Fix RC-01][Fix OBS-01]
@@ -94,17 +129,9 @@ export const silenceToneErrors = () => { // [Fix RC-01][Fix OBS-01]
 export const recoverAudio = async () => {
   const Tone = getTone();
   if (!Tone?.context) return false;
-  try {
-    if (Tone.context.state !== 'running') {
-      await Tone.start();
-    }
-    if (Tone.context.state === 'running') {
-      audioUnlocked = true;
-    }
+  const unlocked = await unlockAudioEngine(); // [Fix AudioUnlock-AU-004] Funnel recovery through shared unlock helper
+  if (unlocked) {
     console.info('[Reliability] Audio recover attempted');
-    return true;
-  } catch (e) {
-    console.error('[Reliability] Audio recover failed:', e);
-    return false;
   }
+  return unlocked;
 };

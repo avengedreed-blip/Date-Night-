@@ -12,9 +12,9 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, Motio
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
 import { getDbStoreInstance, subscribePromptStoreFallback } from './utils/promptStoreCore.js'; // RELIABILITY: lazy access to store to avoid TDZ
 // RELIABILITY: load gesture logic first (inert)
-import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
+import { attachAudioGestureListeners, silenceToneErrors, unlockAudioEngine } from './audioGate.js'; // [Fix AudioUnlock-AU-007] Surface centralized unlock helper to UI layer
 // RELIABILITY: then load core engine (lazy async Tone)
-import { getAudioEngine, resumeAudioOnGesture, loadTone } from './core/audioCore.js'; // [Fix H2]
+import { getAudioEngine, loadTone } from './core/audioCore.js'; // [Fix H2]
 
 // RELIABILITY: Safe UUID helper tolerates browsers without crypto.randomUUID.
 const safeUUID = () => {
@@ -1160,6 +1160,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     }, [drawWheel]);
 
     const handleSpin = useCallback(async () => {
+        const unlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-008] Kick off audio unlock directly on spin gesture
         const now = Date.now();
         if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
             return;
@@ -1172,8 +1173,8 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         spinLock.current = true; // Acquire lock
 
         const toneReady = typeof window !== 'undefined' && !!window.Tone; // RELIABILITY: detect Tone availability before playback.
-        if (toneReady && window.Tone.context?.state === 'suspended') {
-            await resumeAudioOnGesture(); // RELIABILITY: Ensure gesture resume resolves before playback.
+        if (toneReady) {
+            await unlockPromise;
         }
 
         if (wheelCanvasRef.current) wheelCanvasRef.current.style.transition = 'none';
@@ -2164,8 +2165,13 @@ function App() {
         if (typeof document === 'undefined') {
             return undefined;
         }
-        const resumeAudioContext = async () => {
-            if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); } // RELIABILITY: Ensure audio context resumes only when Tone is available.
+        const resumeAudioContext = () => {
+            if (typeof window !== 'undefined' && window.Tone) {
+                const unlockResult = unlockAudioEngine(); // [Fix AudioUnlock-AU-009] Use centralized unlock helper within document gesture listener
+                if (unlockResult?.catch) {
+                    unlockResult.catch((err) => console.log('[AudioUnlock] Unlock rejected inside document gesture listener', err));
+                }
+            }
         };
         const attachUnlockListener = () => {
             document.removeEventListener('click', resumeAudioContext);
@@ -2370,10 +2376,10 @@ function App() {
 
     useEffect(() => {
         if (modalState.type && modalState.type !== 'settings' && modalState.type !== 'editor' && modalState.type !== 'closing' ) {
-            // RELIABILITY: Ensure audio context resumes before playing modal SFX.
-            (async () => {
-                if (typeof window !== 'undefined' && window.Tone) { await resumeAudioOnGesture(); audioEngine.playModalOpen(); } // RELIABILITY: Guard modal audio playback behind Tone availability.
-            })();
+            const ToneGlobal = typeof window !== 'undefined' ? window.Tone : null;
+            if (ToneGlobal?.context?.state === 'running') {
+                audioEngine.playModalOpen(); // [Fix AudioUnlock-AU-010] Only trigger modal audio when context is already unlocked
+            }
         }
     // RELIABILITY: Include deferred audio engine to avoid stale reference after lazy init.
     }, [modalState.type, audioEngine]);
@@ -2483,18 +2489,24 @@ function App() {
 
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
+        const initialUnlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-011] Invoke unlock helper immediately on onboarding begin
         setIsUnlockingAudio(true);
         safeSetAudioInitFailed(false); // [Fix M1]
 
-        const attemptAudioInit = async () => {
+        const attemptAudioInit = async (unlockPromise) => {
             if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
                 safeSetScriptLoadState('error'); // [Fix C1]
                 return false; // [Fix C1]
             }
             try {
-                await resumeAudioOnGesture(); // [Fix C1]
+                const unlockResult = unlockPromise ?? unlockAudioEngine(); // [Fix AudioUnlock-AU-012] Ensure every init attempt reuses centralized unlock helper
+                const unlocked = await unlockResult;
+                if (!unlocked) {
+                    console.log('[AudioUnlock] Unlock helper reported unsuccessful attempt during initialization');
+                    return false; // [Fix M1]
+                }
             } catch (e) {
-                console.error('Audio unlock failed:', e); // [Fix M1]
+                console.log('[AudioUnlock] Unlock promise rejected during initialization', e);
                 return false; // [Fix M1]
             }
             const success = await audioEngine.initialize(); // [Fix C1]
@@ -2508,7 +2520,8 @@ function App() {
         let unlockSucceeded = false; // [Fix M1]
         try {
             for (let attempt = 0; attempt < 2 && !unlockSucceeded; attempt += 1) { // [Fix M1]
-                const success = await attemptAudioInit(); // [Fix C1]
+                const unlockPromise = attempt === 0 ? initialUnlockPromise : unlockAudioEngine(); // [Fix AudioUnlock-AU-013] Retry unlock synchronously on subsequent attempts
+                const success = await attemptAudioInit(unlockPromise); // [Fix C1]
                 if (success) {
                     unlockSucceeded = true; // [Fix M1]
                 } else if (attempt === 0) {
@@ -2847,7 +2860,7 @@ function App() {
                 )}
                 {gameState === "onboarding_intro" && (
                 <motion.div key="onboarding_intro" {...motionProps}>
-                    <OnboardingIntro onNext={() => setGameState("onboarding_vibe")} {...onboardingProps} />
+                    <OnboardingIntro onNext={() => { unlockAudioEngine(); setGameState("onboarding_vibe"); }} {...onboardingProps} /> {/* [Fix AudioUnlock-AU-015] Ensure Continue gesture triggers unlock helper */}
                 </motion.div>
                 )}
                 {gameState === "onboarding_vibe" && (

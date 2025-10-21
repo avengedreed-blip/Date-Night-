@@ -1,3 +1,5 @@
+import { unlockAudioEngine } from '../audioGate.js'; // [Fix AudioUnlock-AU-005] Share unlock helper across audio modules
+
 // TRACE: module load marker
 try { console.log('[INIT]', 'core/audioCore.js'); } catch {}
 // RELIABILITY: Centralized audio engine core extracted from App.jsx to break TDZ cycles.
@@ -20,12 +22,7 @@ export const loadTone = async () => {
 // RELIABILITY: Shared gesture-based audio resume helper reused across modules.
 export const resumeAudioOnGesture = async () => {
   if (typeof window === 'undefined' || !window.Tone || !window.Tone.context) return;
-  if (window.Tone.context.state === 'running') return;
-  try {
-    await window.Tone.start();
-  } catch (err) {
-    console.warn('Tone.js resume failed', err);
-  }
+  await unlockAudioEngine(); // [Fix AudioUnlock-AU-006] Delegate resume handling to centralized unlock helper
 };
 
 // RELIABILITY: Singleton holder to lazily construct the audio engine on demand.
@@ -209,11 +206,10 @@ const createAudioEngine = () => {
         const ToneNS = window.Tone; // [Fix C1]
         for (let attempt = 0; attempt < 3 && ToneNS?.context?.state !== 'running'; attempt += 1) { // [Fix C1]
           await ensureAudioUnlocked(); // [Fix C1]
-          if (ToneNS?.context?.state !== 'running' && ToneNS?.context?.resume) {
-            try {
-              await ToneNS.context.resume(); // [Fix C1]
-            } catch (resumeErr) {
-              console.warn('[Reliability] Tone resume attempt failed:', resumeErr); // [Fix C1]
+          if (ToneNS?.context?.state !== 'running') {
+            const unlockOutcome = await unlockAudioEngine(); // [Fix AudioUnlock-AU-014] Re-attempt unlock via centralized helper during engine init retry
+            if (!unlockOutcome) {
+              console.log('[AudioUnlock] Unlock helper reported stalled context during engine init retry');
             }
           }
           if (ToneNS?.context?.state !== 'running') {
