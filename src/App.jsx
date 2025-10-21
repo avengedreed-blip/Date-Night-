@@ -110,7 +110,6 @@ const getAudioEngineInstance = () => {
   return placeholder;
 };
 
-
 // THEME: Global theme profiles including backgrounds and accents for CSS propagation.
 const themeProfiles = Object.freeze({
   // THEME: Velour Nights palette and theming variables.
