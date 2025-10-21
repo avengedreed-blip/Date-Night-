@@ -5,12 +5,12 @@ console.log('[APP] App.jsx module loading...');
 /* --- PROMPT RELIABILITY FIX --- */
 /* --- SECRET ROUND TIMING PATCH --- */
 /* --- UNIVERSAL TRIPLE-TAP RESTORE --- */
-import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect, useId } from 'react'; // [Fix A11Y-03]
 import { createPortal } from 'react-dom'; // RELIABILITY: safe import
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, MotionConfig } from 'framer-motion';
 // RELIABILITY: IndexedDB prompt storage helpers.
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
-import { getDbStoreInstance } from './utils/promptStoreCore.js'; // RELIABILITY: lazy access to store to avoid TDZ
+import { getDbStoreInstance, subscribePromptStoreFallback } from './utils/promptStoreCore.js'; // RELIABILITY: lazy access to store to avoid TDZ
 // RELIABILITY: load gesture logic first (inert)
 import { attachAudioGestureListeners, silenceToneErrors } from './audioGate.js';
 // RELIABILITY: then load core engine (lazy async Tone)
@@ -66,8 +66,7 @@ const getAudioEngineInstance = () => {
       return null;
     }
   };
-  // RELIABILITY: kick off engine loading immediately to warm caches prior to user gesture.
-  ensureEngine();
+  // [Fix PERF-01] Defer engine loading until a consumer explicitly invokes an action.
   // RELIABILITY: asynchronous methods that must return promises for compatibility with existing awaiters.
   const asyncMethods = ['initialize', 'startTheme', 'stopTheme'];
   // RELIABILITY: synchronous fire-and-forget methods invoked from UI interactions.
@@ -182,7 +181,30 @@ const themeProfiles = Object.freeze({
 
 
 // --- DATA & PROMPTS ---
-const defaultPrompts = { truthPrompts: { normal: [ "Would you remarry if your partner died?", "Do you ever regret marrying your partner?", "What's your biggest regret? Explain.", "What's your favorite thing that your partner does for you?", "What do you envision the next 50 years with your partner being like? Explain in great detail.", "Tell your partner something that they need to improve on. Go into great detail.", "What's one thing you're scared to ask me, but really want to know?", "What is a secret you've kept from your parents?", "Describe a dream you've had about me.", "If you could change one thing about our history, what would it be?", "What's the most childish thing you still do?", "What do you think is your partner's biggest strength?", "If money didn't matter, what would you want your partner to do with their life?", "What song always makes you think of your partner?", "What was your happiest childhood memory?", "What's one thing you've always wanted to tell your partner, but never have?", "What scares you most about the future with your partner?", "What's one thing you wish you and your partner could do more often?", "If you could relive one day of your relationship, which would it be?" ], spicy: [ "What's your favorite part of your partner's body?", "Describe a time they turned you on without even realizing it.", "Tell me a sexual fantasy involving us you've never shared.", "What's the most embarrassing thing that's ever happened to you during sex?", "Who's the best sexual partner you've ever had? And why?", "Name a celebrity you've had a sexual fantasy about.", "If you could only do one sex act for the rest of your life, what would it be?", "Have you ever cheated on a partner?", "Have you ever faked an orgasm with your current partner?", "Tell your partner what you're thinking about in great detail, when you're horny prior to sex.", "What's the naughtiest thought you've had about me this week?", "Rank your top three favorite positions.", "What's one thing you want me to do to you in bed more often?", "What's the sexiest dream you've ever had about your partner?", "What's the dirtiest compliment you secretly want from your partner?", "Where's the riskiest place you'd want to fool around with your partner?", "If you could make your partner wear any outfit for you, what would it be?", "What's your favorite way your partner touches you when you want it to lead to sex?", "What's a fantasy involving your partner you've never admitted out loud?", "If you could freeze time, what would you do to your partner while no one else was watching?", "What's a kink you're curious about but nervous to try with your partner?", "Which body part of your partner do you think about most when they're not around?", "What's your favorite way your partner has teased you without realizing it?" ], extreme: [ "Describe your partner's genitals in great detail.", "Which ex would you most likely allow to have a threesome with you and your partner?", "Which ex looked the best naked?", "Describe a sexual experience with an ex in great detail.", "Have you ever masturbated in an inappropriate time or place?", "What do you want to do to your partner right now? Be detailed.", "Tell your partner any ways that they can improve in bed.", "What is the biggest lie you have ever told me?", "Have you ever considered leaving me? If so, why?", "Describe the most intense orgasm you've ever had, with or without me.", "What is something you've never told anyone about your sexual history?", "Describe, in detail, your perfect sexual scenario with your partner.", "What's the nastiest thought you've ever had about your partner in public?", "If you could film yourself and your partner doing anything in bed, what would you want captured?", "What's the dirtiest porn search you've ever typed that you'd want to try with your partner?", "Which of your partner's friends have you thought about sexually (even fleetingly)?", "What's the roughest or wildest thing you secretly want your partner to do to you?", "What's your most shameful fantasy you'd never tell your partner's family?", "If you could erase one sexual experience from your past before meeting your partner, what would it be?", "What do you imagine when you masturbate that you haven't told your partner?" ] }, darePrompts: { normal: [ "Take a cute selfie with your partner.", "Give your best impression of your partner.", "Let your partner tickle you for 30 seconds.", "Give your partner a shoulder rub for 3 minutes.", "Do a somersault.", "Do 10 jumping jacks.", "Give your partner a hug, as if they were dying.", "Post a picture of your partner on social media with a loving caption.", "Let your partner draw a temporary tattoo on you with a pen.", "Serenade your partner with a love song, even if you can't sing.", "Do your best runway walk for your partner.", "Take a silly selfie right now and show your partner.", "Speak in an accent for the next 2 rounds with your partner.", "Tell your partner two truths and a lie.", "Share your screen time stats with your partner.", "Do your best dance move for your partner for 20 seconds.", "Hug a pillow and pretend it's your partner for one minute.", "Let your partner pick a silly nickname for you for the rest of the game.", "Text a random emoji to a friend and show your partner the reply.", "Sing your favorite chorus from memory to your partner.", "Pretend to be your partner for one round." ], spicy: [ "Give me a passionate kiss, as if we haven't seen each other in a month.", "Whisper what you want to do to me later tonight in my ear.", "Gently remove one item of my clothing.", "Sit in your partner's lap for 3 rounds.", "Touch your partner through their clothes until they're aroused.", "Take a sexy selfie in only your underwear and send it to your partner.", "Flash your partner a private part of your choosing.", "Explain in graphic detail how you like to masturbate.", "Give your partner a topless lap dance.", "Gently kiss your partner's naked genitals.", "Let me choose an item of your clothing for you to remove.", "Give your partner a hickey somewhere they can hide it.", "Describe how you would tease me if we were in public right now.", "Describe out loud how you'd undress your partner right now.", "Let your partner choose a body part for you to kiss.", "Show your partner how you'd seduce them in public without anyone noticing.", "Whisper something filthy in your partner's ear.", "Stroke your partner's hand or arm like you would in foreplay.", "Show your partner your sexiest facial expression.", "Bite your lip and hold eye contact with your partner for 30 seconds.", "Kiss your partner as if it were your first time.", "Moan your partner's name in a way that turns them on." ], extreme: [ "Give your partner a hand job for 3 minutes.", "Sit on your partner's face, or let them sit on your face for 3 minutes.", "Soak for 5 minutes.", "Masturbate for 5 minutes while watching porn that your partner picked.", "Edge your partner twice.", "Perform oral sex on your partner for 2 minutes.", "Use a sex toy on your partner for 3 minutes.", "Allow your partner to use any sex toy they'd like on your for the next 5 minutes.", "Wear a butt plug for the next 10 minutes.", "Let your partner tie you up for 5 minutes and do what they want.", "Roleplay a fantasy of your partner's choosing for 5 minutes.", "Take a nude photo and send it to your partner right now.", "Lick or suck on a body part your partner chooses.", "Let your partner spank you as hard as they want 5 times.", "Send your partner a dirty voice note moaning their name.", "Simulate oral sex on your fingers for 30 seconds in front of your partner.", "Strip completely naked and pose however your partner says.", "Show your partner how you masturbate, in detail.", "Act out your favorite porn scene with your partner.", "Put something of your partner's in your mouth and treat it like foreplay.", "Let your partner tie your hands for the next 3 rounds.", "Edge yourself while your partner watches for 2 minutes.", "Edge your partner while you watch for 2 minutes." ] }, triviaQuestions: { normal: [ "What is your partner's birthday?", "What is your partner's favorite show?", "What is their biggest insecurity?", "What is your partner's biggest fear?", "What is their dream job if money were no object?", "What is one thing your partner has always wanted to try but hasn't yet?", "What is the first gift you gave each other?", "What is your partner's favorite childhood cartoon?", "What is the name of your partner's first pet?", "What is your partner's favorite board game?", "Would you rather go into the past and meet your ancestors or go into the future and meet your great-great grandchildren?", "What was their favorite band in high school?", "What do they love most about themselves?", "What do they love the most about you?", "What's my favorite animal?", "If they could haunt anyone as a ghost, who would it be?", "What is their dream vacation?", "What accomplishment are they most proud of?", "What historical figure would they most want to have lunch with?", "What is their least favorite food?", "What's your partner's go-to comfort food?", "What movie does your partner always want to rewatch?", "What's your partner's biggest pet peeve?", "Which holiday does your partner love the most?", "What's your partner's dream car?", "What color does your partner secretly dislike wearing?", "Who was your partner's first celebrity crush?", "What's your partner's most annoying habit (to you)?", "If your partner could instantly master one skill, what would it be?" ] }, consequences: { normal: [ "You have to call your partner a name of their choosing for the rest of the game.", "Every wrong answer for the rest of the game gets you tickled for 20 seconds.", "Go get your partner a drink.", "Make your partner a snack.", "You have to end every sentence with 'my love' for the next 3 rounds.", "Give your partner your phone and let them send one playful text to anyone.", "Compliment your partner 5 times in a row.", "Give your partner control of the TV remote tonight.", "Swap seats with your partner for the next round.", "Tell your partner a secret you've never told them.", "Let your partner take an unflattering picture of you.", "You can only answer your partner with 'yes, my love' until your next turn.", "Wear a silly hat (or make one) until the game ends with your partner.", "Post a sweet compliment about your partner on social media." ], spicy: [ "Play the next 3 rounds topless.", "For the next 5 rounds, every time it's your turn, you have to start by kissing your partner.", "Your partner gets to give you one command, and you must obey.", "Play the next 3 rounds bottomless.", "Every wrong answer or refusal requires you to send your partner a nude picture for the rest of the game. Even your partner's wrong answers.", "Remove an article of clothing each round for the remainder of the game.", "Do ten jumping jacks completely naked.", "Swap clothes with your partner for the remainder of the game.", "Your partner gets to spank you, as hard as they want, 5 times.", "Kiss your partner somewhere unexpected.", "Tell your partner your dirtiest thought in the last 24 hours.", "For the next round, sit on your partner's lap.", "Let your partner bite or nibble a place of their choice.", "You have to let your partner mark you with lipstick or a marker.", "Show your partner your favorite sex position (with clothes on).", "Tease your partner without kissing for 1 minute.", "Send your partner a sexy text right now while sitting next to them.", "Give your partner a 1-minute lap dance." ], extreme: [ "Wear a butt plug for the remainder of the game.", "Record yourself masturbating right now and send it to your partner.", "Use a sex toy of your partner's choosing for the remainder of the game.", "Edge yourself for the remainder of the game.", "Allow your partner to act out a fantasy of theirs, and you can't say no.", "You must perform any sexual act your partner demands, right now.", "Send your partner the filthiest nude you've ever taken.", "Use your tongue on any body part your partner picks.", "Strip completely and stay that way until the round ends with your partner.", "Let your partner spank or choke you until they're satisfied.", "Put on a show of how you like to be touched for your partner.", "Allow your partner to record 30 seconds of you doing something sexual.", "Play with a toy in front of your partner right now.", "Moan out loud for 1 minute straight for your partner.", "Let your partner pick your sexual punishment and don't complain." ] } };
+let promptDataCache = null; // [Fix PERF-02]
+let promptDataPromise = null; // [Fix PERF-02]
+
+const loadPromptData = async () => { // [Fix PERF-02]
+  if (promptDataCache) {
+    return promptDataCache;
+  }
+  if (!promptDataPromise) {
+    promptDataPromise = import('./data/prompts.json')
+      .then((mod) => {
+        promptDataCache = mod?.default ?? mod;
+        return promptDataCache;
+      })
+      .catch((err) => {
+        console.warn('[Reliability] Failed to load prompt catalog:', err);
+        promptDataPromise = null;
+        throw err;
+      });
+  }
+  return promptDataPromise;
+};
+
+const clonePromptData = (data) => (data ? structuredClone(data) : null); // [Fix PERF-02]
+
 
 /* --- SECRET ROUND (KATY) --- */
 const secretRoundPrompts = [
@@ -216,18 +238,19 @@ const secretRoundPrompts = [
     },
 ];
 
-const cloneDefaultPrompts = () => structuredClone(defaultPrompts);
-
 const hasArrayBuckets = (bucket, keys) => {
     if (!bucket || typeof bucket !== 'object') return false;
     return keys.every((key) => Array.isArray(bucket[key]));
 };
 
 // RELIABILITY: Normalize stored prompt payloads to avoid malformed queue crashes.
-const normalizeStoredPrompts = (value) => {
-    const defaults = cloneDefaultPrompts();
+const normalizeStoredPrompts = (value, defaults) => { // [Fix PERF-02]
+    const base = clonePromptData(defaults);
+    if (!base) {
+        return value && typeof value === 'object' ? structuredClone(value) : null;
+    }
     if (!value || typeof value !== 'object') {
-        return defaults;
+        return base;
     }
     try {
         const truthValid = hasArrayBuckets(value.truthPrompts, ['normal', 'spicy', 'extreme']);
@@ -236,68 +259,75 @@ const normalizeStoredPrompts = (value) => {
         const consequenceValid = hasArrayBuckets(value.consequences, ['normal', 'spicy', 'extreme']);
 
         if (!(truthValid && dareValid && triviaValid && consequenceValid)) {
-            return defaults;
+            return base;
         }
 
         return {
-            ...defaults,
+            ...base,
             ...value,
-            truthPrompts: { ...defaults.truthPrompts, ...value.truthPrompts },
-            darePrompts: { ...defaults.darePrompts, ...value.darePrompts },
-            triviaQuestions: { ...defaults.triviaQuestions, ...value.triviaQuestions },
-            consequences: { ...defaults.consequences, ...value.consequences },
+            truthPrompts: { ...base.truthPrompts, ...value.truthPrompts },
+            darePrompts: { ...base.darePrompts, ...value.darePrompts },
+            triviaQuestions: { ...base.triviaQuestions, ...value.triviaQuestions },
+            consequences: { ...base.consequences, ...value.consequences },
         };
     } catch (err) {
         console.warn('[Reliability] Failed to normalize stored prompts, using defaults instead.', err);
-        return defaults;
+        return base;
     }
 };
 
 const useLocalStoragePrompts = () => {
-    // RELIABILITY: Initialize prompt state with normalized defaults.
-    const [prompts, setPrompts] = useState(() => cloneDefaultPrompts());
-    // RELIABILITY: Track async prompt hydration status.
+    const [defaultPromptsState, setDefaultPromptsState] = useState(promptDataCache); // [Fix PERF-02]
+    const [prompts, setPrompts] = useState(() => clonePromptData(promptDataCache)); // [Fix PERF-02]
     const [isPromptsLoading, setIsPromptsLoading] = useState(true);
-    // RELIABILITY: Acquire prompt store lazily to avoid module evaluation races.
-    const dbStore = useMemo(() => getDbStoreInstance(), []); // RELIABILITY: lazily capture prompt store singleton
+    const dbStore = useMemo(() => getDbStoreInstance(), []);
 
-    // RELIABILITY: hydrate prompts from IndexedDB store on mount.
     useEffect(() => {
         let isActive = true;
         (async () => {
             try {
+                const defaults = await loadPromptData();
+                if (!isActive) return;
+                setDefaultPromptsState(defaults);
+
                 const stored = await dbStore.getPrompt('prompts');
                 if (stored) {
-                    const normalized = normalizeStoredPrompts(stored);
-                    if (isActive) {
+                    const normalized = normalizeStoredPrompts(stored, defaults);
+                    if (isActive && normalized) {
                         setPrompts(normalized);
+                        return;
                     }
-                    return;
                 }
 
-                const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem('prompts') : null; // RELIABILITY: Guard legacy prompt reads against missing storage.
+                const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem('prompts') : null;
                 if (legacy) {
                     try {
                         const parsed = JSON.parse(legacy);
-                        const normalized = normalizeStoredPrompts(parsed);
-                        if (isActive) {
-                            setPrompts(normalized);
+                        const normalized = normalizeStoredPrompts(parsed, defaults);
+                        const next = normalized || (parsed && typeof parsed === 'object' ? structuredClone(parsed) : null);
+                        if (next) {
+                            if (isActive) {
+                                setPrompts(next);
+                            }
+                            await dbStore.setPrompt('prompts', next);
+                            if (typeof localStorage !== 'undefined') {
+                                localStorage.removeItem('prompts');
+                            }
+                            return;
                         }
-                        await dbStore.setPrompt('prompts', normalized);
-                        if (typeof localStorage !== 'undefined') { localStorage.removeItem('prompts'); } // RELIABILITY: Clear migrated prompts only when storage exists.
-                        return;
                     } catch (err) {
-                        // RELIABILITY: visibility into malformed legacy prompt payloads.
                         console.warn('[Reliability] Failed to parse legacy prompts during hydration', err);
                     }
                 }
 
                 if (isActive) {
-                    setPrompts(cloneDefaultPrompts());
+                    setPrompts(clonePromptData(defaults));
                 }
             } catch (err) {
-                // RELIABILITY: detect IndexedDB hydration failures promptly.
                 console.warn('[Reliability] Failed to hydrate prompts from IndexedDB', err);
+                if (isActive && promptDataCache) {
+                    setPrompts(clonePromptData(promptDataCache));
+                }
             } finally {
                 if (isActive) {
                     setIsPromptsLoading(false);
@@ -320,21 +350,34 @@ const useLocalStoragePrompts = () => {
         } catch {}
     }, []);
 
-    // RELIABILITY: Keep prompts persisted when mutated.
-    const updatePrompts = (newPrompts) => {
-        const normalized = normalizeStoredPrompts(newPrompts);
-        setPrompts(normalized);
-        // RELIABILITY: persist normalized prompts through IndexedDB store.
-        dbStore.setPrompt('prompts', normalized);
-    };
+    const updatePrompts = useCallback((newPrompts) => { // [Fix PERF-02]
+        const defaults = defaultPromptsState || promptDataCache;
+        const normalized = normalizeStoredPrompts(newPrompts, defaults);
+        const next = normalized || (newPrompts && typeof newPrompts === 'object' ? structuredClone(newPrompts) : null);
+        if (!next) return;
+        setPrompts(next);
+        dbStore.setPrompt('prompts', next);
+    }, [defaultPromptsState, dbStore]);
 
-    // RELIABILITY: Reset prompts to defaults and persist immediately.
-    const resetPrompts = () => {
-        const defaults = cloneDefaultPrompts();
-        setPrompts(defaults);
-        // RELIABILITY: persist reset prompts through IndexedDB store.
-        dbStore.setPrompt('prompts', defaults);
-    };
+    const resetPrompts = useCallback(() => { // [Fix PERF-02]
+        const defaults = defaultPromptsState || promptDataCache;
+        if (defaults) {
+            const cloned = clonePromptData(defaults);
+            setPrompts(cloned);
+            dbStore.setPrompt('prompts', cloned);
+            return;
+        }
+        loadPromptData()
+            .then((loaded) => {
+                setDefaultPromptsState(loaded);
+                const cloned = clonePromptData(loaded);
+                setPrompts(cloned);
+                dbStore.setPrompt('prompts', cloned);
+            })
+            .catch((err) => {
+                console.warn('[Reliability] Failed to reset prompts to defaults:', err);
+            });
+    }, [defaultPromptsState, dbStore]);
 
     return {
         prompts,
@@ -745,7 +788,7 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
 
-const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, setGameState, setSecretSticky, setIsSecretThemeUnlocked, isSpinInProgress, modalStateRef, registerWatchdogControl}) => {
+const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWheelTick, playWheelStop, setIsSpinInProgress, currentTheme, canSpin, reducedMotion, safeOpenModal, handleThemeChange, safeSetGameState, safeSetSecretSticky, safeSetIsSecretThemeUnlocked, safeSetSecretRoundUsed, safeSetPulseLevel, extremeActive, isSpinInProgress, modalStateRef, registerWatchdogControl}) => { // [Fix RC-02][Fix SM-01][Fix A11Y-04]
     const [isSpinning, setIsSpinning] = useState(false);
     const [isPointerSettling, setIsPointerSettling] = useState(false);
     const rotationRef = useRef(0);
@@ -756,6 +799,15 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     const animationFrameRef = useRef(null);
     const spinLock = useRef(false);
     const lastSpinTimeRef = useRef(0);
+    const [liveAnnouncement, setLiveAnnouncement] = useState(''); // [Fix A11Y-04]
+    const clearLongPressTimer = useCallback(() => { // [Fix RC-02]
+      longPressRef.current.active = false;
+      if (longPressRef.current.timer) {
+        clearTimeout(longPressRef.current.timer);
+        longPressRef.current.timer = null;
+      }
+    }, []);
+    const lastExtremeState = useRef(false); // [Fix A11Y-04]
 
     const finalizeSpin = useCallback((reason = 'complete') => {
         const rotation = rotationRef.current;
@@ -777,13 +829,14 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         }
         // RELIABILITY: safe normalization of winner label
         const winner = rawWinner.toLowerCase();
+        setLiveAnnouncement(`Wheel result: ${winner}`); // [Fix A11Y-04]
         // DIAGNOSTIC: verify winner dispatch target is callable before invoking
         if (typeof onSpinFinish !== 'function') {
             console.warn('[DIAGNOSTIC][App.jsx][Wheel.finalizeSpin] onSpinFinish handler missing:', onSpinFinish);
             return;
         }
         onSpinFinish(winner, { source: reason });
-    }, [onSpinFinish]);
+    }, [onSpinFinish, setLiveAnnouncement]);
 
     const finishSpinNow = useCallback((reason = 'complete') => {
         if (!spinLock.current) return; // Already finalized or never started
@@ -806,21 +859,23 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
   // INTERACT: encapsulate secret round trigger for long-press invocation
   const triggerSecretRound = useCallback(() => {
     const secretRoundPrompt = secretRoundPrompts[Math.floor(Math.random() * secretRoundPrompts.length)]; // INTERACT: derive secret prompt payload upon activation
-    setGameState("secretLoveRound"); // INTERACT: transition game state when long-press fires
+    safeSetGameState("secretLoveRound"); // [Fix RC-02] transition game state when long-press fires
     handleThemeChange("foreverPromise"); // INTERACT: elevate secret theme for hidden round
-    setSecretSticky(true); // INTERACT: persist secret theme selection
-    setIsSecretThemeUnlocked(true); // INTERACT: flag secret theme as unlocked
+    safeSetSecretSticky(true); // [Fix RC-02] persist secret theme selection
+    safeSetIsSecretThemeUnlocked(true); // [Fix RC-02] flag secret theme as unlocked
     safeOpenModal("secretPrompt", { prompt: secretRoundPrompt }); // INTERACT: surface secret prompt modal when triggered
+    safeSetSecretRoundUsed(true); // [Fix SM-01]
+    safeSetPulseLevel(0); // [Fix SM-01]
     if (typeof secretPromptOpenAt !== 'undefined') { secretPromptOpenAt.t = Date.now(); } // INTERACT: update debounce timestamp for secret prompts
-  }, [handleThemeChange, safeOpenModal, setGameState, setIsSecretThemeUnlocked, setSecretSticky]);
+  }, [handleThemeChange, safeOpenModal, safeSetGameState, safeSetIsSecretThemeUnlocked, safeSetSecretSticky, safeSetSecretRoundUsed, safeSetPulseLevel]);
 
   // INTERACT: long-press detection for secret round
   const onSecretPointerDown = useCallback((e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return; // INTERACT: ignore non-primary mouse buttons
     if (!canSpin || spinLock.current) return; // INTERACT: block secret gesture when wheel unavailable
+    clearLongPressTimer(); // [Fix RC-02] reset any prior timers before scheduling a new long press
     longPressRef.current.active = true; // INTERACT: mark pointer as active for pending trigger
     longPressRef.current.triggered = false; // INTERACT: reset triggered flag for this gesture lifecycle
-    if (longPressRef.current.timer) { clearTimeout(longPressRef.current.timer); } // INTERACT: clear any previous timers before scheduling new
     longPressRef.current.timer = setTimeout(() => {
       if (longPressRef.current.active) { // INTERACT: only trigger when pointer still active
         longPressRef.current.triggered = true; // INTERACT: flag that secret round has fired
@@ -828,16 +883,41 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
         try { triggerSecretRound(); } catch (err) { console.warn('[SecretRound]', err); } // INTERACT: invoke hidden round with error resilience
       }
     }, LONG_PRESS_MS); // INTERACT: delay invocation until long-press duration satisfied
-  }, [canSpin, triggerSecretRound]);
+  }, [canSpin, triggerSecretRound, clearLongPressTimer]);
 
   // INTERACT: cancel long-press timer when pointer lifts or leaves
   const onSecretPointerCancel = useCallback(() => {
-    longPressRef.current.active = false; // INTERACT: disable pending trigger when pointer cancels
-    if (longPressRef.current.timer) {
-      clearTimeout(longPressRef.current.timer); // INTERACT: remove scheduled trigger when gesture ends
-      longPressRef.current.timer = null; // INTERACT: release timer reference for GC
-    }
-  }, []);
+    clearLongPressTimer(); // [Fix RC-02]
+  }, [clearLongPressTimer]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') {
+            return () => {};
+        }
+        const cancelOnBlur = () => clearLongPressTimer(); // [Fix RC-02]
+        const cancelOnHide = () => {
+            if (document.hidden) {
+                clearLongPressTimer(); // [Fix RC-02]
+            }
+        };
+        window.addEventListener('blur', cancelOnBlur);
+        document.addEventListener('visibilitychange', cancelOnHide);
+        return () => {
+            clearLongPressTimer(); // [Fix RC-02]
+            window.removeEventListener('blur', cancelOnBlur);
+            document.removeEventListener('visibilitychange', cancelOnHide);
+        };
+    }, [clearLongPressTimer]);
+
+    useEffect(() => {
+        if (extremeActive && !lastExtremeState.current) {
+            setLiveAnnouncement('Extreme round activated.'); // [Fix A11Y-04]
+        }
+        if (!extremeActive && lastExtremeState.current) {
+            setLiveAnnouncement('Extreme round complete.'); // [Fix A11Y-04]
+        }
+        lastExtremeState.current = !!extremeActive;
+    }, [extremeActive, setLiveAnnouncement]);
 
     // RELIABILITY: Register watchdog only after finishSpinNow is defined to avoid TDZ.
     useEffect(() => {
@@ -1183,7 +1263,18 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
 
     return (
-        <div className="wheel-container" role="img" aria-label="Game wheel">
+        <div
+            className="wheel-container"
+            role="group"
+            aria-label="Game wheel"
+            tabIndex={0}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleSpin();
+                }
+            }} // [Fix A11Y-04]
+        >
             <canvas ref={wheelCanvasRef} className="wheel-canvas"></canvas>
             <div className="pointer">
                 <motion.div
@@ -1201,6 +1292,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
                     </div>
                 </motion.div>
             </div>
+            <div aria-live="polite" className="sr-only">{liveAnnouncement}</div> {/* [Fix A11Y-04] */}
             <div
   className="spin-button-wrapper"
   onContextMenu={(e) => e.preventDefault()}
@@ -1222,9 +1314,19 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 });
 
 const PulseMeter = ({ level }) => {
+    const labelId = useId(); // [Fix A11Y-03]
+    const clampedLevel = Math.max(0, Math.min(100, Number.isFinite(level) ? level : 0)); // [Fix A11Y-03]
     return (
-        <div className="pulse-meter">
-            <div className="pulse-meter__fill" style={{ width: `${level}%` }}/>
+        <div
+            className="pulse-meter"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(clampedLevel)}
+            aria-labelledby={labelId}
+        >
+            <span id={labelId} className="sr-only">Connection pulse</span> {/* [Fix A11Y-03] */}
+            <div className="pulse-meter__fill" style={{ width: `${clampedLevel}%` }}/>
             <div className="pulse-meter__wave" />
             <div className="pulse-meter__gloss" />
         </div>
@@ -1235,6 +1337,7 @@ const PulseMeter = ({ level }) => {
 const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClasses = "" }) => {
   const parallax = useParallax(8);
   const visible = !!isOpen;
+  const titleId = useId(); // [Fix A11Y-02]
 
   React.useEffect(() => {
     if (!visible) return;
@@ -1291,10 +1394,10 @@ const Modal = ({ isOpen, onClose, title, children, activeVisualTheme, customClas
         transition={{ type: "tween", duration: 0.25 }}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
       >
         <div className="modal-header">
-          {title && <h2 id="modal-title" className="modal-title text-3xl text-white">{title}</h2>}
+          {title && <h2 id={titleId} className="modal-title text-3xl text-white">{title}</h2>}
           <motion.button aria-label="Close modal" onClick={onClose} className="modal-close-button text-white/70 hover:text-white" whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.1 }}>
             <CloseIcon />
           </motion.button>
@@ -1380,10 +1483,26 @@ const OnboardingVibePicker = ({ onVibeSelect, currentTheme, activeVisualTheme })
                 <p className="text-lg mt-2 text-white/70">Set the mood for your night.</p>
                 <div className="flex flex-col gap-4 mt-8 w-full max-w-xs">
                     {themes.map(theme => (
-                        <motion.div key={theme.id} onClick={() => onVibeSelect(theme.id)} className="theme-swatch" whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.03 }}>
+                        <motion.button
+                            key={theme.id}
+                            type="button"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => onVibeSelect(theme.id)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onVibeSelect(theme.id);
+                                }
+                            }}
+                            className="theme-swatch"
+                            aria-pressed={currentTheme === theme.id}
+                            whileTap={{ scale: 0.97 }}
+                            whileHover={{ scale: 1.03 }}
+                        >{/* [Fix A11Y-01] */}
                             <div className="theme-chips">{theme.colors.map(c => <div key={c} className="theme-chip" style={{ backgroundColor: c }} />)}</div>
                             <span className="font-bold text-lg">{theme.name}</span>
-                        </motion.div>
+                        </motion.button>
                     ))}
                 </div>
             </div>
@@ -1535,10 +1654,24 @@ const SettingsModal = ({ isOpen, onClose, settings, onSettingsChange, isMuted, o
                 <h3 className="text-xl font-bold mb-3 text-[var(--theme-label)]">Vibe</h3>
                 <div className="flex flex-col gap-2">
                 {themes.map(theme => (
-                    <div key={theme.id} onClick={() => onThemeChange(theme.id)} className={`theme-swatch ${currentTheme === theme.id ? 'ring-2 ring-[var(--theme-highlight)]' : ''}`}>
+                    <button
+                        key={theme.id}
+                        type="button"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onThemeChange(theme.id)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onThemeChange(theme.id);
+                            }
+                        }}
+                        className={`theme-swatch ${currentTheme === theme.id ? 'ring-2 ring-[var(--theme-highlight)]' : ''}`}
+                        aria-pressed={currentTheme === theme.id}
+                    >{/* [Fix A11Y-01] */}
                         <div className="theme-chips">{theme.colors.map(c => <div key={c} className="theme-chip" style={{backgroundColor: c}}/>)}</div>
                         <span className="font-bold">{theme.name}</span>
-                    </div>
+                    </button>
                 ))}
                 </div>
             </div>
@@ -1726,6 +1859,20 @@ function App() {
     console.log('[APP] Rendering main App component...');
     const { prompts, updatePrompts, resetPrompts, isLoading } = useLocalStoragePrompts();
     const [scriptLoadState, setScriptLoadState] = useState('loading');
+    const [storageWarningReason, setStorageWarningReason] = useState(null); // [Fix PRIV-01][Fix STOR-02]
+    const storageWarningMessage = useMemo(() => { // [Fix PRIV-01][Fix STOR-02]
+        if (!storageWarningReason) return null;
+        return storageWarningReason === 'payload-too-large'
+            ? 'Saved prompts exceed offline limits. Progress will reset after you close the app.'
+            : 'Offline storage is unavailable. Prompts will reset if you reload.';
+    }, [storageWarningReason]);
+
+    useEffect(() => {
+        const unsubscribe = subscribePromptStoreFallback((details = {}) => {
+            setStorageWarningReason(details.reason || 'storage-unavailable');
+        });
+        return unsubscribe;
+    }, []); // [Fix PRIV-01][Fix STOR-02]
     const [isUnlockingAudio, setIsUnlockingAudio] = useState(false);
     const dbStore = useMemo(() => getDbStoreInstance(), []); // RELIABILITY: Capture prompt store lazily once App is evaluating.
     useEffect(() => { // RELIABILITY: detect circular import regressions during runtime
@@ -1831,7 +1978,7 @@ function App() {
     // RELIABILITY: async init for audio engine after mount
     useEffect(() => {
         const detachGestureListeners = attachAudioGestureListeners(); // [Fix C1][Fix M2]
-        silenceToneErrors();
+        const cleanupToneErrors = silenceToneErrors(); // [Fix RC-01][Fix OBS-01]
         let cancelled = false; // [Fix C1]
         (async () => {
             try {
@@ -1851,6 +1998,9 @@ function App() {
             cancelled = true; // [Fix C1]
             if (typeof detachGestureListeners === 'function') {
                 detachGestureListeners(); // [Fix M2]
+            }
+            if (typeof cleanupToneErrors === 'function') {
+                cleanupToneErrors(); // [Fix RC-01][Fix OBS-01]
             }
         };
     }, []);
@@ -2483,7 +2633,8 @@ function App() {
     const handleSecretLoveRoundClose = useCallback(() => {
         setModalState({ type: "", data: null });
         endRoundAndStartNew();
-    }, [setModalState, endRoundAndStartNew]);
+        safeSetPulseLevel(0); // [Fix SM-01]
+    }, [setModalState, endRoundAndStartNew, safeSetPulseLevel]);
 
     const handleExtremeIntroClose = useCallback(() => {
         setModalState({ type: "", data: null });
@@ -2734,9 +2885,12 @@ function App() {
                                     reducedMotion={prefersReducedMotion} 
                                     safeOpenModal={safeOpenModal} 
                                     handleThemeChange={handleThemeChange}
-                                    setGameState={setGameState}
-                                    setSecretSticky={setSecretSticky}
-                                    setIsSecretThemeUnlocked={setIsSecretThemeUnlocked}
+                                    safeSetGameState={safeSetGameState}
+                                    safeSetSecretSticky={safeSetSecretSticky}
+                                    safeSetIsSecretThemeUnlocked={safeSetIsSecretThemeUnlocked}
+                                    safeSetSecretRoundUsed={safeSetSecretRoundUsed}
+                                    safeSetPulseLevel={safeSetPulseLevel}
+                                    extremeActive={isExtremeMode}
                                     isSpinInProgress={isSpinInProgress}
                                     modalStateRef={modalStateRef}
                                     registerWatchdogControl={registerWheelControl}
@@ -2779,6 +2933,12 @@ function App() {
 
     return (
         <MotionConfig transition={{ type: "spring", stiffness: 240, damping: 24 }}>
+            {storageWarningMessage && (
+                <div className="storage-warning" role="alert">
+                    {/* [Fix PRIV-01][Fix STOR-02] */}
+                    {storageWarningMessage}
+                </div>
+            )}
             <div
                 id="app-root"
                 className={`min-h-screen ${activeVisualTheme.themeClass} font-['Inter',_sans-serif] text-white flex flex-col items-center overflow-hidden relative ${prefersReducedMotion ? 'reduced-motion' : ''}`}

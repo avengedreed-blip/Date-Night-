@@ -54,11 +54,20 @@ export const ensureAudioReady = async () => {
   if (Tone.context.state !== 'running') await Tone.start();
 };
 
-export const silenceToneErrors = () => {
+export const silenceToneErrors = () => { // [Fix RC-01][Fix OBS-01]
   const Tone = getTone();
-  if (!Tone) return;
-  Tone.context.onstatechange = () => {};
-  if (typeof window === 'undefined') return;
+  let previousStateHandler;
+  if (Tone?.context) {
+    previousStateHandler = Tone.context.onstatechange;
+    Tone.context.onstatechange = () => {};
+  }
+  if (typeof window === 'undefined') {
+    return () => {
+      if (Tone?.context) {
+        Tone.context.onstatechange = previousStateHandler;
+      }
+    };
+  }
   const handler = (event) => {
     const reason = event?.reason;
     const message = typeof reason === 'string' ? reason : String(reason || '');
@@ -66,12 +75,19 @@ export const silenceToneErrors = () => {
     if (!audioUnlocked && isAutoplay) {
       console.warn('[Reliability] Suppressed pre-gesture audio rejection:', message);
       event.preventDefault?.();
+      return;
     }
-    if (audioUnlocked) {
-      window.removeEventListener('unhandledrejection', handler, true);
+    if (audioUnlocked && message) {
+      console.error('[Tone]', message, reason); // [Fix OBS-01]
     }
   };
   window.addEventListener('unhandledrejection', handler, true);
+  return () => {
+    window.removeEventListener('unhandledrejection', handler, true);
+    if (Tone?.context) {
+      Tone.context.onstatechange = previousStateHandler;
+    }
+  };
 };
 
 // RELIABILITY: exposed recovery helper to re-attempt context start when errors surface

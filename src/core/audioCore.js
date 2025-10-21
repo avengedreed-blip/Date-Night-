@@ -41,6 +41,7 @@ const createAudioEngine = () => {
   let sfxChannel;
   let lastTickTime = 0;
   let userMusicVolume = -6;
+  let pendingFadeEventId = null; // [Fix TONE-01]
 
   // RELIABILITY: Ensure Tone context is unlocked before touching audio nodes.
   const ensureAudioUnlocked = async () => {
@@ -261,7 +262,7 @@ const createAudioEngine = () => {
 
       await ensureAudioUnlocked();
 
-      const startNewThemeAndFadeIn = () => {
+      const startNewThemeAndFadeIn = () => { // [Fix TONE-01]
         if (activeTheme) {
           if (typeof activeTheme !== 'object' || !activeTheme.parts || !Array.isArray(activeTheme.parts)) {
             console.warn('[DIAGNOSTIC][App.jsx][audioEngine.startTheme] Active theme corrupt before cleanup:', activeTheme);
@@ -296,9 +297,28 @@ const createAudioEngine = () => {
         musicChannel.volume.rampTo(userMusicVolume, 1.5);
       };
 
+      if (pendingFadeEventId !== null) { // [Fix TONE-01]
+        if (typeof ToneNS.Transport.clear === 'function') {
+          ToneNS.Transport.clear(pendingFadeEventId);
+        } else {
+          clearTimeout(pendingFadeEventId);
+        }
+        pendingFadeEventId = null;
+      }
+
       if (activeTheme && ToneNS.Transport.state === 'started') {
         musicChannel.volume.rampTo(-Infinity, 0.5);
-        setTimeout(startNewThemeAndFadeIn, 550);
+        if (typeof ToneNS.Transport.scheduleOnce === 'function') {
+          pendingFadeEventId = ToneNS.Transport.scheduleOnce(() => {
+            pendingFadeEventId = null;
+            startNewThemeAndFadeIn();
+          }, '+0.55'); // [Fix TONE-01]
+        } else {
+          pendingFadeEventId = setTimeout(() => {
+            pendingFadeEventId = null;
+            startNewThemeAndFadeIn();
+          }, 550); // [Fix TONE-01]
+        }
       } else {
         startNewThemeAndFadeIn();
       }
@@ -313,6 +333,14 @@ const createAudioEngine = () => {
         if (part.cancel) part.cancel(0);
       });
       activeTheme = null;
+      if (pendingFadeEventId !== null) { // [Fix TONE-01]
+        if (typeof ToneNS.Transport.clear === 'function') {
+          ToneNS.Transport.clear(pendingFadeEventId);
+        } else {
+          clearTimeout(pendingFadeEventId);
+        }
+        pendingFadeEventId = null;
+      }
       if (ToneNS.Transport.state === 'started') {
         ToneNS.Transport.stop();
         ToneNS.Transport.cancel(0);

@@ -6,35 +6,54 @@ import { get, set, del, clear, keys } from 'idb-keyval';
 const hasBrowserStorage = () => typeof localStorage !== 'undefined'; // RELIABILITY: Shared guard helpers for browser storage fallbacks.
 
 const memoryFallback = {}; // RELIABILITY: In-memory persistence when localStorage is unavailable.
-const COOKIE_PREFIX = 'dn_prompt_'; // [Fix H1]
+const fallbackSubscribers = new Set(); // [Fix PRIV-01][Fix STOR-02]
+let notifiedMemoryOnly = false; // [Fix PRIV-01][Fix STOR-02]
+let lastFallbackDetails = null; // [Fix PRIV-01][Fix STOR-02]
 
-const persistCookieFallback = (key, serialized) => { // [Fix H1]
-  if (typeof document === 'undefined') {
-    memoryFallback[key] = serialized;
-    return;
+export const subscribePromptStoreFallback = (callback) => { // [Fix PRIV-01][Fix STOR-02]
+  if (typeof callback !== 'function') return () => {};
+  fallbackSubscribers.add(callback);
+  if (lastFallbackDetails) {
+    try {
+      callback(lastFallbackDetails);
+    } catch (err) {
+      console.warn('[Reliability] Prompt fallback subscriber error:', err); // [Fix PRIV-01][Fix STOR-02]
+    }
   }
-  try {
-    document.cookie = `${COOKIE_PREFIX}${encodeURIComponent(key)}=${encodeURIComponent(serialized)};path=/;max-age=31536000;SameSite=Lax`; // [Fix H1]
-  } catch (err) {
-    console.warn('[Reliability] Cookie fallback write failed:', err); // [Fix H1]
-    memoryFallback[key] = serialized;
-  }
+  return () => {
+    fallbackSubscribers.delete(callback);
+  };
 };
 
-const persistFallback = (key, value) => { // [Fix H1]
+const notifyMemoryFallback = (details) => { // [Fix PRIV-01][Fix STOR-02]
+  if (notifiedMemoryOnly) return;
+  notifiedMemoryOnly = true;
+  lastFallbackDetails = details;
+  fallbackSubscribers.forEach((callback) => {
+    try {
+      callback(details);
+    } catch (err) {
+      console.warn('[Reliability] Prompt fallback subscriber error:', err); // [Fix PRIV-01][Fix STOR-02]
+    }
+  });
+};
+
+const persistFallback = (key, value) => { // [Fix PRIV-01][Fix STOR-02]
   const serialized = JSON.stringify(value);
   if (hasBrowserStorage()) {
     try {
-      localStorage.setItem(key, serialized); // [Fix H1]
+      localStorage.setItem(key, serialized);
       return;
     } catch (err) {
-      console.warn('[Reliability] LocalStorage fallback write failed:', err); // [Fix H1]
+      console.warn('[Reliability] LocalStorage fallback write failed:', err); // [Fix PRIV-01][Fix STOR-02]
     }
   }
-  persistCookieFallback(key, serialized); // [Fix H1]
+  memoryFallback[key] = serialized;
+  const exceedsSoftLimit = serialized.length > 3072; // [Fix STOR-02]
+  notifyMemoryFallback({ reason: exceedsSoftLimit ? 'payload-too-large' : 'storage-unavailable' }); // [Fix PRIV-01][Fix STOR-02]
 };
 
-const readFallback = (key) => { // [Fix H1]
+const readFallback = (key) => { // [Fix PRIV-01][Fix STOR-02]
   if (hasBrowserStorage()) {
     try {
       const raw = localStorage.getItem(key);
@@ -42,26 +61,14 @@ const readFallback = (key) => { // [Fix H1]
         return JSON.parse(raw);
       }
     } catch (err) {
-      console.warn('[Reliability] LocalStorage fallback read failed:', err); // [Fix H1]
-    }
-  }
-  if (typeof document !== 'undefined') {
-    try {
-      const target = `${COOKIE_PREFIX}${encodeURIComponent(key)}=`;
-      const cookie = document.cookie.split(';').map((c) => c.trim()).find((entry) => entry.startsWith(target));
-      if (cookie) {
-        const value = decodeURIComponent(cookie.substring(target.length));
-        return JSON.parse(value);
-      }
-    } catch (err) {
-      console.warn('[Reliability] Cookie fallback read failed:', err); // [Fix H1]
+      console.warn('[Reliability] LocalStorage fallback read failed:', err); // [Fix PRIV-01][Fix STOR-02]
     }
   }
   try {
     const rawMemory = memoryFallback[key];
     return typeof rawMemory === 'string' ? JSON.parse(rawMemory) : undefined;
   } catch (err) {
-    console.warn('[Reliability] Memory fallback parse failed:', err); // [Fix H1]
+    console.warn('[Reliability] Memory fallback parse failed:', err); // [Fix PRIV-01][Fix STOR-02]
     return undefined;
   }
 };

@@ -3,12 +3,14 @@ const APP_VERSION = '1.3.0';
 const CACHE_VERSION = `pulse-shell-${APP_VERSION}`;
 // RELIABILITY: Removed /favicon.ico to prevent install rejection on missing asset
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+self.__ASSET_MANIFEST = Array.isArray(self.__ASSET_MANIFEST) ? self.__ASSET_MANIFEST : []; // [Fix PWA-02]
+const PRECACHE_ASSETS = [...new Set([...CORE_ASSETS, ...self.__ASSET_MANIFEST])]; // [Fix PWA-02]
 
 self.addEventListener('install', (event) => {
   // RELIABILITY: pre-cache core shell assets for offline bootstrap.
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(CORE_ASSETS).catch(err => {
+      cache.addAll(PRECACHE_ASSETS).catch(err => {
         // RELIABILITY: log but do not reject install when optional asset is missing.
         console.warn('[Reliability] Cache preload failed:', err);
       })
@@ -37,9 +39,21 @@ self.addEventListener('message', (event) => {
 
   if (event.data.type === 'CACHE_URLS' && Array.isArray(event.data.payload)) {
     // RELIABILITY: allow manual warmup of assets requested by the client.
-    const urls = event.data.payload.filter(Boolean);
+    const urls = event.data.payload
+      .map((url) => {
+        try {
+          const normalized = new URL(url, self.location.origin);
+          return normalized.pathname + normalized.search;
+        } catch {
+          return url;
+        }
+      })
+      .filter(Boolean);
+    self.__ASSET_MANIFEST = Array.from(new Set([...self.__ASSET_MANIFEST, ...urls])); // [Fix PWA-02]
     event.waitUntil(
-      caches.open(CACHE_VERSION).then((cache) => cache.addAll(urls))
+      caches.open(CACHE_VERSION).then((cache) => cache.addAll(urls).catch((err) => {
+        console.warn('[Reliability] Failed to warm asset cache:', err);
+      }))
     );
   }
 });
@@ -93,7 +107,7 @@ self.addEventListener('fetch', (event) => {
           if (cachedFallback) {
             return cachedFallback; // [Fix H3]
           }
-          return new Response('', { status: 200, headers: { 'Content-Type': 'text/plain' } }); // [Fix H3]
+          return new Response('Service Unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } }); // [Fix PWA-01]
         }
       })()
     );
