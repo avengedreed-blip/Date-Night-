@@ -3,22 +3,47 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Service-Worker-Allowed", "value": "/" },
-        { "key": "X-TODO-CSP", "value": "TODO: Replace unsafe-inline directives with hashed or nonce-based CSP." },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; frame-src 'self' https://vercel.live; script-src 'self' https://vercel.live 'unsafe-inline' blob:; worker-src 'self' blob:; connect-src 'self' https://vercel.live https://fonts.googleapis.com https://fonts.gstatic.com blob:; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self'; base-uri 'self'; frame-ancestors 'self';", "_comment": "[Fix CSP-01][Fix HDR-01]" },
-        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" },
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        },
+        {
+          "key": "X-TODO-CSP",
+          "value": "TODO: Replace unsafe-inline directives with hashed or nonce-based CSP."
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; frame-src 'self' https://vercel.live; script-src 'self' https://vercel.live 'unsafe-inline' blob:; worker-src 'self' blob:; connect-src 'self' https://vercel.live https://fonts.googleapis.com https://fonts.gstatic.com blob:; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self'; base-uri 'self'; frame-ancestors 'self';"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "credentialless"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        }
       ]
     },
     {
       "source": "/manifest.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
       ]
     }
   ],
   "redirects": [
-    { "source": "/404", "destination": "/", "permanent": false }
+    {
+      "source": "/404",
+      "destination": "/",
+      "permanent": false
+    }
   ]
 }
