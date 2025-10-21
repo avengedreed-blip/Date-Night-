@@ -4,10 +4,17 @@
       "source": "/(.*)",
       "headers": [
         { "key": "Service-Worker-Allowed", "value": "/" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'self'; frame-ancestors 'self'" },
+        { "key": "X-TODO-CSP", "value": "TODO: Replace unsafe-inline directives with hashed or nonce-based CSP." },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://vercel.live 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://vercel.live; img-src 'self' data:; media-src 'self'; base-uri 'self'; frame-ancestors 'self'" },
         { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
         { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" },
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     }
   ],
