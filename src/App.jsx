@@ -2025,61 +2025,6 @@ function App() {
 
     // Use the new prompt queue hook
     const { modalState, setModalState: setModalStateUnsafe, enqueuePrompt, queueState, dispatchQueue, resetQueue } = usePromptQueue();
-    // RELIABILITY: guard modal state updates scheduled after async delays.
-    const safeSetModalState = useCallback((next) => {
-        if (isMounted.current) {
-            setModalStateUnsafe(next);
-        }
-    }, [setModalStateUnsafe]);
-    // RELIABILITY: guard script loader status transitions triggered by deferred callbacks.
-    const safeSetScriptLoadState = useCallback((next) => {
-        if (isMounted.current) {
-            setScriptLoadState(next);
-        }
-    }, [setScriptLoadState]);
-    // RELIABILITY: guard onboarding unlock flags updated from async flows.
-    const safeSetIsUnlockingAudio = useCallback((next) => {
-        if (isMounted.current) {
-            setIsUnlockingAudio(next);
-        }
-    }, [setIsUnlockingAudio]);
-    // RELIABILITY: guard audio failure flags to avoid writes after teardown.
-    const safeSetAudioInitFailed = useCallback((next) => {
-        if (isMounted.current) {
-            setAudioInitFailed(next);
-        }
-    }, [setAudioInitFailed]);
-    // RELIABILITY: guard game state transitions invoked from timers.
-    const safeSetGameState = useCallback((next) => {
-        if (isMounted.current) {
-            setGameState(next);
-        }
-    }, [setGameState]);
-    // RELIABILITY: guard secret round unlock toggles invoked asynchronously.
-    const safeSetSecretRoundUsed = useCallback((next) => {
-        if (isMounted.current) {
-            setSecretRoundUsed(next);
-        }
-    }, [setSecretRoundUsed]);
-    // RELIABILITY: guard sticky theme toggles when closing secret rounds.
-    const safeSetSecretSticky = useCallback((next) => {
-        if (isMounted.current) {
-            setSecretSticky(next);
-        }
-    }, [setSecretSticky]);
-    // RELIABILITY: guard secret theme unlock flag changes across async flows.
-    const safeSetIsSecretThemeUnlocked = useCallback((next) => {
-        if (isMounted.current) {
-            setIsSecretThemeUnlocked(next);
-        }
-    }, [setIsSecretThemeUnlocked]);
-    // RELIABILITY: guard pulse level adjustments scheduled from timers.
-    const safeSetPulseLevel = useCallback((next) => {
-        if (isMounted.current) {
-            setPulseLevel(next);
-        }
-    }, [setPulseLevel]);
-    const setModalState = safeSetModalState; // RELIABILITY: reuse safe setter across existing call sites.
     const modalStateRef = useRef(modalState); // Keep ref for legacy dependencies if any
 
     useLayoutEffect(() => {
@@ -2124,12 +2069,12 @@ function App() {
     useLayoutEffect(() => {
         promptQueueStateRef.current = queueState;
     }, [queueState]);
-    
+
     const initialSettings = getInitialSettings();
     const [currentTheme, setCurrentTheme] = useState(initialSettings.theme);
     const [settings, setSettings] = useState(initialSettings.volumes);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(initialSettings.reducedMotion);
-    
+
     const [backgroundTheme, setBackgroundTheme] = useState(initialSettings.theme);
     const [activeBg, setActiveBg] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
@@ -2151,6 +2096,62 @@ function App() {
     const [currentPlayer, setCurrentPlayer] = useState('p1');
     const [recentPrompts, setRecentPrompts] = useState({ truth: [], dare: [], trivia: [] });
     const [secretRoundUsed, setSecretRoundUsed] = useState(false);
+
+    // [Fix TDZ-001] Declare safe setters after their corresponding hooks to avoid temporal dead zones.
+    const safeSetModalState = useCallback((next) => {
+        if (isMounted.current) {
+            setModalStateUnsafe(next);
+        }
+    }, [setModalStateUnsafe]);
+    // [Fix TDZ-001] Guard script loader updates post-mount.
+    const safeSetScriptLoadState = useCallback((next) => {
+        if (isMounted.current) {
+            setScriptLoadState(next);
+        }
+    }, [setScriptLoadState]);
+    // [Fix TDZ-001] Guard onboarding unlock flag updates post-mount.
+    const safeSetIsUnlockingAudio = useCallback((next) => {
+        if (isMounted.current) {
+            setIsUnlockingAudio(next);
+        }
+    }, [setIsUnlockingAudio]);
+    // [Fix TDZ-001] Guard audio failure toggles after teardown.
+    const safeSetAudioInitFailed = useCallback((next) => {
+        if (isMounted.current) {
+            setAudioInitFailed(next);
+        }
+    }, [setAudioInitFailed]);
+    // [Fix TDZ-001] Guard game state transitions scheduled asynchronously.
+    const safeSetGameState = useCallback((next) => {
+        if (isMounted.current) {
+            setGameState(next);
+        }
+    }, [setGameState]);
+    // [Fix TDZ-001] Guard secret round usage toggles post-mount.
+    const safeSetSecretRoundUsed = useCallback((next) => {
+        if (isMounted.current) {
+            setSecretRoundUsed(next);
+        }
+    }, [setSecretRoundUsed]);
+    // [Fix TDZ-001] Guard sticky secret theme toggles post-mount.
+    const safeSetSecretSticky = useCallback((next) => {
+        if (isMounted.current) {
+            setSecretSticky(next);
+        }
+    }, [setSecretSticky]);
+    // [Fix TDZ-001] Guard secret theme unlock toggles post-mount.
+    const safeSetIsSecretThemeUnlocked = useCallback((next) => {
+        if (isMounted.current) {
+            setIsSecretThemeUnlocked(next);
+        }
+    }, [setIsSecretThemeUnlocked]);
+    // [Fix TDZ-001] Guard pulse level adjustments queued after mount.
+    const safeSetPulseLevel = useCallback((next) => {
+        if (isMounted.current) {
+            setPulseLevel(next);
+        }
+    }, [setPulseLevel]);
+    const setModalState = safeSetModalState; // [Fix TDZ-001] Reuse guarded setter across call sites.
 
     const turnIntroTimeoutRef = useRef(null);
     const previousThemeRef = useRef(initialSettings.theme);
