@@ -149,7 +149,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
     navigator.serviceWorker.ready
       .then((reg) => {
-        reg.update();
+        // [Fix PWA-04] Update requests handled during registration to prevent duplicate refresh loops.
         postAssetManifest(reg);
       })
       .catch(() => {});

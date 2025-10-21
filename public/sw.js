@@ -5,6 +5,7 @@ const CACHE_VERSION = `pulse-shell-${APP_VERSION}`;
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 self.__ASSET_MANIFEST = Array.isArray(self.__ASSET_MANIFEST) ? self.__ASSET_MANIFEST : []; // [Fix PWA-02]
 const PRECACHE_ASSETS = [...new Set([...CORE_ASSETS, ...self.__ASSET_MANIFEST])]; // [Fix PWA-02]
+let skipWaitingRequested = false; // [Fix PWA-04]
 
 self.addEventListener('install', (event) => {
   // RELIABILITY: pre-cache core shell assets for offline bootstrap.
@@ -27,12 +28,15 @@ self.addEventListener('activate', (event) => {
     )
   );
   self.clients.claim();
+  skipWaitingRequested = false; // [Fix PWA-04]
 });
 
 self.addEventListener('message', (event) => {
   if (!event.data || typeof event.data !== 'object') return;
 
   if (event.data.type === 'SKIP_WAITING') {
+    if (skipWaitingRequested) return; // [Fix PWA-04]
+    skipWaitingRequested = true; // [Fix PWA-04]
     // RELIABILITY: activate updated worker as soon as client acknowledges.
     self.skipWaiting();
   }
