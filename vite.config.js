@@ -1,4 +1,5 @@
 import fs from "fs";
+import { brotliCompressSync } from "zlib";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -34,6 +35,33 @@ const criticalPreloadPlugin = () => ({
   },
 });
 
+// [Optimize QA-010] Lightweight Brotli copies for hosting layers that serve precompressed assets
+const brotliBundlePlugin = () => ({
+  name: "pulse-brotli-writer",
+  apply: "build",
+  generateBundle(_, bundle) {
+    const compressible = /\.(js|css|html|svg)$/i;
+    for (const [fileName, output] of Object.entries(bundle)) {
+      if (!compressible.test(fileName)) continue;
+      const payload = output.type === "asset" ? output.source : output.code;
+      if (!payload) continue;
+
+      try {
+        const buffer = typeof payload === "string" ? Buffer.from(payload) : Buffer.from(payload);
+        const compressed = brotliCompressSync(buffer);
+        this.emitFile({
+          type: "asset",
+          fileName: `${fileName}.br`,
+          source: compressed,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.warn(`[Optimize QA-010] Skipped Brotli compression for ${fileName}: ${reason}`);
+      }
+    }
+  },
+});
+
 // RELIABILITY: optional safety — clear old cache on build start
 try {
   fs.rmSync(".vite_cache", { recursive: true, force: true });
@@ -43,7 +71,11 @@ try {
 export default defineConfig({
   // RELIABILITY: Use root-relative base to keep PWA asset URLs consistent in all environments
   base: "./",
-  plugins: [react(), criticalPreloadPlugin()], // [Fix PERF-03]
+  plugins: [
+    react(),
+    criticalPreloadPlugin(), // [Fix PERF-03]
+    brotliBundlePlugin(), // [Optimize QA-010]
+  ],
   publicDir: "public",
   // RELIABILITY: Ensure idb-keyval imports resolve to local shim for offline builds.
   resolve: {
@@ -58,6 +90,7 @@ export default defineConfig({
     sourcemap: false,
     outDir: "dist",
     assetsInlineLimit: 8192,
+    chunkSizeWarningLimit: 1500,
 
     // RELIABILITY: safer Terser config to prevent variable hoisting/mangling crash
     terserOptions: {

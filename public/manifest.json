@@ -1,13 +1,13 @@
 {
-  "name": "Date Night",
-  "short_name": "DateNight",
+  "name": "Pulse — An Intimate Game for Couples",
+  "short_name": "Pulse",
   "id": "/",
   "scope": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#000000",
-  "description": "Plan and enjoy your next date night with curated ideas and playlists.",
+  "theme_color": "#250037",
+  "description": "Pulse is an intimate, romantic game for couples featuring Truth, Dare, and Trivia with beautiful themes and music.",
   "icons": [
     {
       "src": "./icon-192.png",
