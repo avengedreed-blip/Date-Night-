@@ -6,32 +6,27 @@ const getTone = () => (typeof window !== 'undefined' ? window.Tone : null);
 // RELIABILITY: Global flag to track unlock status
 let audioUnlocked = false;
 
-// [Fix AUD-01] Gesture-synchronous, idempotent unlock helper with deterministic logging
+// [Fix UI-001] Gesture-synchronous, idempotent unlock helper with deterministic logging
 export async function unlockAudioEngine() {
   const tone = getTone();
   const ctx = tone?.context;
-  if (audioUnlocked && ctx?.state === 'running') {
-    console.log('[AudioUnlock] OK');
-    return true;
-  }
-  try {
-    if (!ctx) {
-      throw new Error('Tone context unavailable');
-    }
-    if (ctx.state !== 'running') {
-      await ctx.resume();
-    }
-    await tone?.start?.();
-    if (ctx.state === 'running') {
-      audioUnlocked = true;
-    }
-    console.log('[AudioUnlock] OK');
-    return true;
-  } catch (e) {
+
+  if (!tone || !ctx) {
+    console.warn('[AudioUnlock] Skipped: Tone not loaded');
     audioUnlocked = false;
-    console.error('[AudioUnlock] FAIL', e);
     return false;
   }
+
+  if (ctx.state === 'running') {
+    if (!audioUnlocked) {
+      audioUnlocked = true;
+    }
+    console.info('[AudioUnlock] Success');
+    return true;
+  }
+
+  audioUnlocked = false;
+  return false;
 }
 let detachGestureListeners; // [Fix M2]
 let listenersAttached = false; // [Fix M2]
@@ -122,6 +117,21 @@ export const silenceToneErrors = () => { // [Fix RC-01][Fix OBS-01]
 export const recoverAudio = async () => {
   const Tone = getTone();
   if (!Tone?.context) return false;
+
+  const ctx = Tone.context;
+  if (ctx.state !== 'running') {
+    try {
+      if (typeof ctx.resume === 'function') {
+        await ctx.resume();
+      }
+      if (typeof Tone.start === 'function') {
+        await Tone.start();
+      }
+    } catch (err) {
+      console.warn('[AudioUnlock] Recovery resume failed', err); // [Fix UI-001]
+    }
+  }
+
   const unlocked = await unlockAudioEngine(); // [Fix AudioUnlock-AU-004] Funnel recovery through shared unlock helper
   if (unlocked) {
     console.info('[Reliability] Audio recover attempted');

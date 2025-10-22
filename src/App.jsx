@@ -2510,20 +2510,62 @@ function App() {
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
         console.log('[ButtonReact] Begin handler attached'); // [Fix ButtonReact-02]
-        const initialUnlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-011] Invoke unlock helper immediately on onboarding begin
-        const toneReadyPromise = window.Tone ? Promise.resolve(true) : loadTone().then(() => true).catch(() => false); // [Fix AUD-01] Prime Tone load alongside unlock gesture
         setIsUnlockingAudio(true);
         safeSetAudioInitFailed(false); // [Fix M1]
 
-        const attemptAudioInit = async (unlockPromise) => {
-            const toneReady = await toneReadyPromise; // [Fix AUD-01] Ensure Tone runtime is available before initialization
+        let initialUnlockPromise;
+        const ensureToneReady = async () => { // [Fix UI-001] Guard Tone preparation inside user gesture chain
+            try {
+                let runtimeTone = typeof window !== 'undefined' ? window.Tone : null;
+                if (!runtimeTone) {
+                    const toneModule = await loadTone();
+                    runtimeTone = typeof window !== 'undefined' ? window.Tone ?? toneModule : toneModule;
+                }
+                const ctx = runtimeTone?.context;
+                if (!ctx) {
+                    console.warn('[AudioUnlock] Skipped: Tone not yet loaded');
+                    return false;
+                }
+                if (ctx.state !== 'running') {
+                    try {
+                        await ctx.resume();
+                    } catch (resumeErr) {
+                        console.warn('[AudioUnlock] Resume failed', resumeErr); // [Fix UI-001]
+                        return false;
+                    }
+                }
+                if (typeof runtimeTone?.start === 'function') {
+                    try {
+                        await runtimeTone.start();
+                    } catch (startErr) {
+                        console.warn('[AudioUnlock] Tone.start failed', startErr); // [Fix UI-001]
+                    }
+                }
+                return ctx.state === 'running';
+            } catch (err) {
+                console.warn('[AudioUnlock] Tone preload failed', err); // [Fix UI-001]
+                return false;
+            }
+        };
+
+        const toneReadyPromise = ensureToneReady();
+
+        const attemptAudioInit = async (attempt) => {
+            const toneReady = await toneReadyPromise; // [Fix UI-001] Ensure Tone runtime is loaded before unlock attempts
             if (!toneReady || typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
                 safeSetScriptLoadState('error'); // [Fix C1]
                 return false; // [Fix C1]
             }
+            let unlocked = false;
             try {
-                const unlockResult = unlockPromise ?? unlockAudioEngine(); // [Fix AudioUnlock-AU-012] Ensure every init attempt reuses centralized unlock helper
-                const unlocked = await unlockResult;
+                if (attempt === 0) {
+                    if (!initialUnlockPromise) {
+                        initialUnlockPromise = unlockAudioEngine();
+                    }
+                    unlocked = await initialUnlockPromise;
+                } else {
+                    unlocked = await unlockAudioEngine();
+                }
                 if (!unlocked) {
                     console.log('[AudioUnlock] Unlock helper reported unsuccessful attempt during initialization');
                     return false; // [Fix M1]
@@ -2543,8 +2585,7 @@ function App() {
         let unlockSucceeded = false; // [Fix M1]
         try {
             for (let attempt = 0; attempt < 2 && !unlockSucceeded; attempt += 1) { // [Fix M1]
-                const unlockPromise = attempt === 0 ? initialUnlockPromise : unlockAudioEngine(); // [Fix AudioUnlock-AU-013] Retry unlock synchronously on subsequent attempts
-                const success = await attemptAudioInit(unlockPromise); // [Fix C1]
+                const success = await attemptAudioInit(attempt); // [Fix C1]
                 if (success) {
                     unlockSucceeded = true; // [Fix M1]
                 } else if (attempt === 0) {
