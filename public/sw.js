@@ -1,5 +1,6 @@
 // RELIABILITY: simple offline cache; avoids blocked Workbox import
-const APP_VERSION = '1.3.0';
+// [Fix CSSPreload-002] Bump version to invalidate caches holding stale CSS assets
+const APP_VERSION = '1.3.1';
 const CACHE_VERSION = `pulse-shell-${APP_VERSION}`;
 // RELIABILITY: Removed /favicon.ico to prevent install rejection on missing asset
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
@@ -20,17 +21,21 @@ self.addEventListener('install', (event) => {
       })
     )
   );
-  self.skipWaiting();
+  self.skipWaiting(); // [Fix CSSPreload-003] Ensure new worker activates immediately
 });
 
 self.addEventListener('activate', (event) => {
   // RELIABILITY: drop legacy caches so new revisions take effect immediately.
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => (k !== CACHE_VERSION ? caches.delete(k) : Promise.resolve())))
-    )
+    caches.keys()
+      .then((keys) =>
+        Promise.all(keys.map((k) => (k !== CACHE_VERSION ? caches.delete(k) : Promise.resolve())))
+      )
+      .then(() => {
+        console.log('[SW] Cache version updated', CACHE_VERSION); // [Fix CSSPreload-004] Trace cache refresh for audits
+      })
   );
-  self.clients.claim();
+  self.clients.claim(); // [Fix CSSPreload-005] Take control of clients after activation
   skipWaitingRequested = false; // [Fix PWA-04]
 });
 
