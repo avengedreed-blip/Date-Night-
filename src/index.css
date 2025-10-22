@@ -16,6 +16,7 @@
   --pointer-tilt: 2.5deg; /* visual default; app reads this for math too */
   --pulse-glow-intensity: .5;
   --beat-duration: 1s;
+  --theme-foreground: #ffffff; /* [Fix AX-06] Default text color token */
 }
 
 /* Ensures consistent mobile theming in standalone PWA display */
@@ -38,7 +39,12 @@ html, body, #root {
 
 body {
   background: #000;
-  color: #fff;
+  color: var(--theme-foreground, #fff); /* [Fix AX-06] Honor theme foreground token */
+}
+
+#root,
+.app-root {
+  color: var(--theme-foreground, #fff); /* [Fix AX-06] Propagate theme foreground */
 }
 
 /* [Fix A11Y-03] Hidden text helper for assistive technology */
@@ -125,6 +131,7 @@ body {
     --theme-pulse: #f8c8ff;
     --theme-sheen: rgba(255, 160, 240, 0.55);
     --theme-shadow: rgba(25, 5, 45, 0.9);
+    --theme-foreground: #2b134b; /* [Fix AX-06] Dark foreground for contrast */
   }
   /* === Forever Promise === */
   .theme-forever-promise {
@@ -175,8 +182,9 @@ body, #app-content {
   background: linear-gradient(145deg, #1a1632 0%, #2d2447 60%, #191526 100%)
 }
 
+/* [Fix AX-06] Lavender Promise gradient contrast adjustments */
 .theme-lavender-promise-bg {
-  background: linear-gradient(145deg, #544b80 0%, #b8a1ff 40%, #e4dfff 100%);
+  background: linear-gradient(145deg, #544b80 0%, #b8a1ff 40%, #d4ccff 100%);
 }
 
 .theme-forever-promise-bg {
