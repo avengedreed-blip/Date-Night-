@@ -6,27 +6,31 @@ const getTone = () => (typeof window !== 'undefined' ? window.Tone : null);
 // RELIABILITY: Global flag to track unlock status
 let audioUnlocked = false;
 
-// [Fix UI-001] Gesture-synchronous, idempotent unlock helper with deterministic logging
+// [Fix AU-01] Gesture-synchronous unlock that resumes context and starts Tone
 export async function unlockAudioEngine() {
-  const tone = getTone();
-  const ctx = tone?.context;
-
-  if (!tone || !ctx) {
-    console.warn('[AudioUnlock] Skipped: Tone not loaded');
+  try {
+    const tone = getTone();
+    const ctx = tone?.context;
+    if (!tone || !ctx) {
+      throw new Error('Tone.js unavailable');
+    }
+    if (ctx.state !== 'running' && typeof ctx.resume === 'function') {
+      await ctx.resume();
+    }
+    if (typeof tone.start === 'function') {
+      await tone.start();
+    }
+    if (ctx.state === 'running') {
+      audioUnlocked = true;
+      console.log('[AudioUnlock] OK');
+      return true;
+    }
+    throw new Error('AudioContext not running after resume');
+  } catch (err) {
     audioUnlocked = false;
+    console.error('[AudioUnlock] FAIL', err);
     return false;
   }
-
-  if (ctx.state === 'running') {
-    if (!audioUnlocked) {
-      audioUnlocked = true;
-    }
-    console.info('[AudioUnlock] Success');
-    return true;
-  }
-
-  audioUnlocked = false;
-  return false;
 }
 let detachGestureListeners; // [Fix M2]
 let listenersAttached = false; // [Fix M2]

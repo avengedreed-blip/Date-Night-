@@ -2018,22 +2018,6 @@ function App() {
         return () => { isMounted.current = false; };
     }, []);
 
-    // RELIABILITY: async init for audio engine after mount
-    useEffect(() => {
-        // RELIABILITY: start asynchronous loader for Tone-backed audio engine
-        (async () => {
-            try {
-                // RELIABILITY: await lazy singleton creation prior to initialization
-                const engine = await getAudioEngine();
-                // RELIABILITY: ensure initialize executes only when available
-                if (engine?.initialize) await engine.initialize();
-            } catch (err) {
-                // RELIABILITY: guard against initialization failures without crashing UI
-                console.warn('[Reliability] Audio engine init failed:', err);
-            }
-        })();
-    }, []);
-
     useEffect(() => { // RELIABILITY: defer Tone and migration setup until after mount
         if (typeof window === 'undefined') { // RELIABILITY: skip browser-only wiring during SSR
             return undefined; // RELIABILITY: ensure cleanup contract when no window exists
@@ -2106,27 +2090,12 @@ function App() {
         };
     }, []);
 
-    // RELIABILITY: async init for audio engine after mount
+    // [Fix PF-05] Attach gesture unlock wiring without eagerly loading Tone
     useEffect(() => {
         const detachGestureListeners = attachAudioGestureListeners(); // [Fix C1][Fix M2]
         const cleanupToneErrors = silenceToneErrors(); // [Fix RC-01][Fix OBS-01]
-        let cancelled = false; // [Fix C1]
-        (async () => {
-            try {
-                await loadTone(); // [Fix H2]
-                await getAudioEngine(); // [Fix C1]
-                if (!cancelled) {
-                    setScriptLoadState('loaded'); // [Fix C1]
-                }
-            } catch (err) {
-                console.warn('[Reliability] Audio engine warm load failed:', err); // [Fix C1]
-                if (!cancelled) {
-                    setScriptLoadState('error'); // [Fix C1]
-                }
-            }
-        })();
+        setScriptLoadState('idle'); // [Fix PF-05] Mark audio loader idle until user gesture
         return () => {
-            cancelled = true; // [Fix C1]
             if (typeof detachGestureListeners === 'function') {
                 detachGestureListeners(); // [Fix M2]
             }
@@ -2322,42 +2291,6 @@ function App() {
     const pendingPromptRef = useRef(null);
     const spinWatchdogRef = useRef(null);
 
-    // AudioContext autoplay warning fix
-    useEffect(() => {
-        if (typeof document === 'undefined') {
-            return undefined;
-        }
-        const resumeAudioContext = () => {
-            if (typeof window !== 'undefined' && window.Tone) {
-                const unlockResult = unlockAudioEngine(); // [Fix AudioUnlock-AU-009] Use centralized unlock helper within document gesture listener
-                if (unlockResult?.catch) {
-                    unlockResult.catch((err) => console.log('[AudioUnlock] Unlock rejected inside document gesture listener', err));
-                }
-            }
-        };
-        const attachUnlockListener = () => {
-            document.removeEventListener('click', resumeAudioContext);
-            document.addEventListener('click', resumeAudioContext, { once: true });
-        };
-
-        attachUnlockListener();
-
-        const handleVisibility = () => {
-            if (document.hidden) return;
-            if (typeof window !== 'undefined' && window.Tone?.context?.state === 'suspended') {
-                // RELIABILITY: Re-arm gesture listener after background resume.
-                attachUnlockListener();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibility);
-
-        return () => {
-            document.removeEventListener('click', resumeAudioContext);
-            document.removeEventListener('visibilitychange', handleVisibility);
-        };
-    }, []);
-    
     const visualThemes = {
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
         lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
@@ -2674,40 +2607,24 @@ function App() {
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
         console.log('[ButtonReact] Begin handler attached'); // [Fix ButtonReact-02]
+        void unlockAudioEngine(); // [Fix AU-01] Kick off unlock inside gesture before awaiting work
         setIsUnlockingAudio(true);
         safeSetAudioInitFailed(false); // [Fix M1]
 
         let initialUnlockPromise;
-        const ensureToneReady = async () => { // [Fix UI-001] Guard Tone preparation inside user gesture chain
+        const ensureToneReady = async () => { // [Fix PF-05] Lazy-load Tone during gesture flow
             try {
-                let runtimeTone = typeof window !== 'undefined' ? window.Tone : null;
-                if (!runtimeTone) {
-                    const toneModule = await loadTone();
-                    runtimeTone = typeof window !== 'undefined' ? window.Tone ?? toneModule : toneModule;
-                }
-                const ctx = runtimeTone?.context;
-                if (!ctx) {
-                    console.warn('[AudioUnlock] Skipped: Tone not yet loaded');
+                if (typeof window === 'undefined') {
                     return false;
                 }
-                if (ctx.state !== 'running') {
-                    try {
-                        await ctx.resume();
-                    } catch (resumeErr) {
-                        console.warn('[AudioUnlock] Resume failed', resumeErr); // [Fix UI-001]
-                        return false;
-                    }
+                let runtimeTone = window.Tone;
+                if (!runtimeTone) {
+                    const toneModule = await loadTone();
+                    runtimeTone = window.Tone ?? toneModule;
                 }
-                if (typeof runtimeTone?.start === 'function') {
-                    try {
-                        await runtimeTone.start();
-                    } catch (startErr) {
-                        console.warn('[AudioUnlock] Tone.start failed', startErr); // [Fix UI-001]
-                    }
-                }
-                return ctx.state === 'running';
+                return !!(runtimeTone && runtimeTone.context);
             } catch (err) {
-                console.warn('[AudioUnlock] Tone preload failed', err); // [Fix UI-001]
+                console.warn('[AudioUnlock] Tone preload failed', err); // [Fix PF-05]
                 return false;
             }
         };
@@ -2715,7 +2632,7 @@ function App() {
         const toneReadyPromise = ensureToneReady();
 
         const attemptAudioInit = async (attempt) => {
-            const toneReady = await toneReadyPromise; // [Fix UI-001] Ensure Tone runtime is loaded before unlock attempts
+            const toneReady = await toneReadyPromise; // [Fix PF-05] Ensure Tone runtime is loaded before unlock attempts
             if (!toneReady || typeof window === 'undefined' || !window.Tone || !window.Tone.context) {
                 safeSetScriptLoadState('error'); // [Fix C1]
                 return false; // [Fix C1]
