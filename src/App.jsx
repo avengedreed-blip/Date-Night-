@@ -676,17 +676,40 @@ const ParticleBackground = React.memo(({ currentTheme, pulseLevel, bpm, reducedM
     );
 });
 
-const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
+const Confetti = ({ onFinish, origin, theme, reducedMotion, className = '', style = {} }) => {
+    // [Fix Confetti-Guard-001] Ensure transient Confetti canvas safely handles optional props and origin payloads.
     const canvasRef = useRef(null);
-    const originRef = useRef(origin);
+    const originRef = useRef({ x: 0.5, y: 0.5 }); // [Fix Confetti-Guard-001] Provide neutral default origin to avoid undefined access.
+    const originGuardLoggedRef = useRef(false); // [Fix Confetti-Guard-001] Track origin guard logging to prevent console spam.
+    const styleGuardLoggedRef = useRef(false); // [Fix Confetti-Guard-001] Track style guard logging independently.
+    const invalidHandledRef = useRef(false); // [Fix Confetti-Guard-001] Prevent duplicate onFinish dispatch when skipping render.
+
+    const originValid = typeof origin === 'object' && origin !== null && typeof origin.x === 'number' && typeof origin.y === 'number'; // [Fix Confetti-Guard-001] Validate origin payload before usage.
 
     useEffect(() => {
-        originRef.current = origin;
-    }, [origin]);
+        if (originValid) {
+            originRef.current = origin;
+            originGuardLoggedRef.current = false;
+        }
+    }, [origin, originValid]);
+
+    useEffect(() => {
+        if (!originValid && typeof onFinish === 'function' && !invalidHandledRef.current) {
+            invalidHandledRef.current = true;
+            onFinish();
+        }
+        if (originValid) {
+            invalidHandledRef.current = false;
+        }
+    }, [originValid, onFinish]);
 
     useEffect(() => {
         if (reducedMotion) {
             if (onFinish) onFinish();
+            return;
+        }
+
+        if (!originValid) {
             return;
         }
 
@@ -779,10 +802,29 @@ const Confetti = ({ onFinish, origin, theme, reducedMotion }) => {
             window.removeEventListener('resize', resizeConfetti);
             particles.length = 0;
         };
-    }, [onFinish, theme, reducedMotion]);
+    }, [onFinish, theme, reducedMotion, originValid]);
 
-    const resolvedClassName = className ? `particle-canvas ${className}` : 'particle-canvas';
-    return <canvas ref={canvasRef} className={resolvedClassName} style={style} />;
+    if (!originValid) {
+        if (!originGuardLoggedRef.current) {
+            console.warn('[Guard] Confetti skipped rendering due to invalid origin payload.', { origin }); // [Fix Confetti-Guard-001]
+            originGuardLoggedRef.current = true;
+        }
+        return null;
+    }
+
+    const resolvedClassName = className ? `particle-canvas ${className}` : 'particle-canvas'; // [Fix Confetti-Guard-001] Safe fallback when optional className omitted.
+    const resolvedStyle = style && typeof style === 'object' ? style : {}; // [Fix Confetti-Guard-001] Prevent non-object style usage.
+
+    if (style && typeof style !== 'object') {
+        if (!styleGuardLoggedRef.current) {
+            console.warn('[Guard] Confetti received invalid style prop; defaulting to empty object.', { style }); // [Fix Confetti-Guard-001]
+            styleGuardLoggedRef.current = true;
+        }
+    } else if (styleGuardLoggedRef.current) {
+        styleGuardLoggedRef.current = false;
+    }
+
+    return <canvas ref={canvasRef} className={resolvedClassName} style={resolvedStyle} />;
 };
 
 const CATEGORIES = ['TRUTH', 'DARE', 'TRIVIA'];
@@ -1757,30 +1799,44 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, activeVisual
 );
 
 /* --- SECRET ROUND (KATY) --- */
-const SecretPromptModal = ({ isOpen, prompt, onAccept, onRefuse, activeVisualTheme }) => (
-    <Modal isOpen={isOpen} onClose={onRefuse} title="A Question..." activeVisualTheme={activeVisualTheme} customClasses="secret-message">
-        <div className='text-center'>
-            <h2 className='text-3xl font-semibold mb-4'>{prompt.text}</h2>
-            <div className='flex justify-center gap-6 mt-6'>
-                <button className='btn btn--primary' onClick={onAccept}>Accept</button>
-                <button className='btn btn--secondary' onClick={onRefuse}>Refuse</button>
-            </div>
-        </div>
-    </Modal>
-);
+const SecretPromptModal = ({ isOpen, prompt, onAccept, onRefuse, activeVisualTheme }) => {
+    if (!prompt || typeof prompt.text !== 'string') {
+        console.warn('[Guard] SecretPromptModal skipped due to missing prompt payload.', { prompt }); // [Fix Confetti-Guard-002]
+        return null;
+    }
 
-const SecretMessageModal = ({ isOpen, outcome, onClose, activeVisualTheme }) => (
-    <Modal isOpen={isOpen} onClose={onClose} title={outcome.title} activeVisualTheme={activeVisualTheme} customClasses="secret-message">
-        <div className='text-center'>
-            <p className='text-lg leading-relaxed whitespace-pre-line'>
-                {outcome.message}
-            </p>
-            <div className='flex justify-center mt-6'>
-                <button className='btn btn--primary' onClick={onClose}>Close</button>
+    return (
+        <Modal isOpen={isOpen} onClose={onRefuse} title="A Question..." activeVisualTheme={activeVisualTheme} customClasses="secret-message">
+            <div className='text-center'>
+                <h2 className='text-3xl font-semibold mb-4'>{prompt.text}</h2>
+                <div className='flex justify-center gap-6 mt-6'>
+                    <button className='btn btn--primary' onClick={onAccept}>Accept</button>
+                    <button className='btn btn--secondary' onClick={onRefuse}>Refuse</button>
+                </div>
             </div>
-        </div>
-    </Modal>
-);
+        </Modal>
+    );
+};
+
+const SecretMessageModal = ({ isOpen, outcome, onClose, activeVisualTheme }) => {
+    if (!outcome || typeof outcome.title !== 'string' || typeof outcome.message !== 'string') {
+        console.warn('[Guard] SecretMessageModal skipped due to missing outcome payload.', { outcome }); // [Fix Confetti-Guard-003]
+        return null;
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={outcome.title} activeVisualTheme={activeVisualTheme} customClasses="secret-message">
+            <div className='text-center'>
+                <p className='text-lg leading-relaxed whitespace-pre-line'>
+                    {outcome.message}
+                </p>
+                <div className='flex justify-center mt-6'>
+                    <button className='btn btn--primary' onClick={onClose}>Close</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 
 const getInitialSettings = () => {
