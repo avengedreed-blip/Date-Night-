@@ -76,21 +76,13 @@ self.addEventListener('message', (event) => {
           }
           try {
             const response = await fetch(asset);
-            if (!response) {
-              console.warn('[Reliability] Skipped warm cache entry (no response):', asset);
-              continue;
-            }
-            if (!response.ok || response.type === 'opaque') {
-              console.warn('[Reliability] Skipped warm cache entry (unusable response):', asset, response.status);
-              continue;
-            }
-            try {
+            if (response && response.ok && response.type !== 'opaque' && !response.bodyUsed) {
               await cache.put(asset, response.clone());
-            } catch (cloneErr) {
-              console.warn('[Reliability] Failed to cache warm asset clone:', asset, cloneErr);
+            } else {
+              console.warn('[Reliability] Skipped warm cache entry:', asset);
             }
           } catch (err) {
-            console.warn('[Reliability] Failed to warm asset cache entry:', asset, err);
+            console.warn('[Reliability] Skipped warm cache entry:', asset, err);
           }
         }
       })()
@@ -130,7 +122,13 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const networkResponse = await fetch(request);
-          if (networkResponse && networkResponse.ok && networkResponse.type !== 'opaque' && !bypassCache) {
+          if (
+            networkResponse &&
+            networkResponse.ok &&
+            !networkResponse.bodyUsed &&
+            networkResponse.type !== 'opaque' &&
+            !bypassCache
+          ) {
             try {
               const copy = networkResponse.clone();
               caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
@@ -158,7 +156,7 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const net = await fetch(request);
-          if (net && net.ok && net.type !== 'opaque' && !bypassCache) {
+          if (net && net.ok && !net.bodyUsed && net.type !== 'opaque' && !bypassCache) {
             try {
               const copy = net.clone();
               caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
@@ -186,7 +184,7 @@ self.addEventListener('fetch', (event) => {
         const cached = await caches.match(request);
         if (cached) return cached;
         const net = await fetch(request);
-        if (net && net.ok && net.type !== 'opaque' && !bypassCache) {
+        if (net && net.ok && !net.bodyUsed && net.type !== 'opaque' && !bypassCache) {
           try {
             const copy = net.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
