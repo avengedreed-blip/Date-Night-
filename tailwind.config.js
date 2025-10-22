@@ -19,6 +19,15 @@ export default {
       transitionTimingFunction: {
         "soft-spring": "cubic-bezier(0.16, 1, 0.3, 1)",
       },
+      keyframes: {
+        pulseBeat: {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.85" },
+          "50%": { transform: "scale(1.08)", opacity: "1" },
+        },
+      },
+      animation: {
+        pulseBeat: "pulseBeat 1.2s ease-in-out infinite",
+      },
     },
   },
   corePlugins: {
@@ -26,6 +35,9 @@ export default {
   },
   plugins: [],
   safelist: [
+    'animate-pulse',
+    'animate-pulseBeat',
+    'animate-[pulseBeat]',
     'text-[var(--theme-highlight)]', // [Fix BOOT-004] Preserve theme-driven text utility
     'text-[var(--theme-label)]', // [Fix BOOT-004]
     'ring-[var(--theme-highlight)]', // [Fix BOOT-004]
