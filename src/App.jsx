@@ -1160,6 +1160,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
     }, [drawWheel]);
 
     const handleSpin = useCallback(async () => {
+        console.log('[ButtonReact] Spin handler attached'); // [Fix ButtonReact-02]
         const unlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-008] Kick off audio unlock directly on spin gesture
         const now = Date.now();
         if (spinLock.current || !canSpin || now - lastSpinTimeRef.current < 2000) {
@@ -1459,7 +1460,7 @@ const AudioUnlockScreen = ({ onUnlock, disabled, activeVisualTheme }) => (
         <div className="onboarding-content-block">
           <h1 className="text-8xl font-['Great_Vibes']" style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>Pulse</h1>
           <p className="text-xl mt-4 text-white/80 max-w-xs">The intimate couples game. <br/>Best with sound on.</p>
-          <motion.button onClick={onUnlock} disabled={disabled} className="btn btn--primary mt-12 text-2xl px-12 py-5 begin-button" whileTap={{ scale: 0.95 }}>
+          <motion.button onClick={() => { console.log('[ButtonReact] Begin handler attached'); /* [Fix ButtonReact-02] */ onUnlock?.(); }} disabled={disabled} className="btn btn--primary mt-12 text-2xl px-12 py-5 begin-button" whileTap={{ scale: 0.95 }}>
               {disabled ? <SpinLoader /> : "Begin"}
           </motion.button>
         </div>
@@ -1470,7 +1471,7 @@ const OnboardingIntro = ({ onNext, activeVisualTheme }) => (
         <div className="onboarding-content-block">
             <h2 className="text-4xl font-bold">Welcome to Pulse</h2>
             <p className="text-lg mt-4 text-white/70 max-w-sm">Get ready to connect on a deeper level. Answer truths, complete dares, and see how well you really know each other.</p>
-            <motion.button onClick={onNext} className="btn btn--primary text-xl px-10 py-4 mt-10" whileTap={{ scale: 0.95 }}>Continue</motion.button>
+            <motion.button onClick={() => { console.log('[ButtonReact] Continue handler attached'); /* [Fix ButtonReact-03] */ onNext?.(); }} className="btn btn--primary text-xl px-10 py-4 mt-10" whileTap={{ scale: 0.95 }}>Continue</motion.button>
         </div>
     </OnboardingScreen>
 );
@@ -1493,11 +1494,12 @@ const OnboardingVibePicker = ({ onVibeSelect, currentTheme, activeVisualTheme })
                             type="button"
                             role="button"
                             tabIndex={0}
-                            onClick={() => onVibeSelect(theme.id)}
+                            onClick={() => { console.log('[ButtonReact] VibeSelect handler attached'); /* [Fix ButtonReact-04] */ onVibeSelect?.(theme.id); }}
                             onKeyDown={(event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                     event.preventDefault();
-                                    onVibeSelect(theme.id);
+                                    console.log('[ButtonReact] VibeSelect handler attached'); // [Fix ButtonReact-04]
+                                    onVibeSelect?.(theme.id);
                                 }
                             }}
                             className="theme-swatch"
@@ -1522,7 +1524,7 @@ const PlayerNameScreen = ({ onStart, activeVisualTheme }) => {
             <div className="onboarding-content-block">
                 <h2 className="text-4xl font-bold">Who's Playing?</h2>
                 {/* // QA: add accessible identifiers for onboarding form */}
-                <form id="player-name-form" name="player-name-form" onSubmit={(e) => { e.preventDefault(); onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
+                <form id="player-name-form" name="player-name-form" onSubmit={(e) => { e.preventDefault(); console.log('[ButtonReact] StartGame handler attached'); /* [Fix ButtonReact-05] */ onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
                     <div className="metallic-input-wrapper">
                         {/* // QA: ensure player one field has identifiers */}
                         <input id="player-one-name" name="player-one-name" type="text" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="Player 1 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/>
@@ -2071,6 +2073,18 @@ function App() {
         };
     }, [modalState?.type]);
 
+    useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        const appContent = document.getElementById('app-content');
+        if (!appContent) return undefined;
+        const pointerState = modalState?.type ? 'none' : 'auto';
+        console.log(`[ButtonReact] app-content pointer-events -> ${pointerState}`); // [Fix ButtonReact-01]
+        appContent.style.pointerEvents = pointerState; // [Fix ButtonReact-01]
+        return () => {
+            appContent.style.pointerEvents = ''; // [Fix ButtonReact-01]
+        };
+    }, [modalState?.type]);
+
     const promptQueueStateRef = useRef(queueState);
     useLayoutEffect(() => {
         promptQueueStateRef.current = queueState;
@@ -2448,6 +2462,7 @@ function App() {
             console.warn('[DIAGNOSTIC][App.jsx][handleThemeChange] Invalid themeId provided:', themeId);
             return;
         }
+        console.log('[ButtonReact] ThemeChange handler attached'); // [Fix ButtonReact-06]
         const next = themeId;
         setCurrentTheme(prev => (previousThemeRef.current = prev, next));
         const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
@@ -2494,6 +2509,7 @@ function App() {
 
     const handleUnlockAudio = useCallback(async () => {
         if (isUnlockingAudio) return;
+        console.log('[ButtonReact] Begin handler attached'); // [Fix ButtonReact-02]
         const initialUnlockPromise = unlockAudioEngine(); // [Fix AudioUnlock-AU-011] Invoke unlock helper immediately on onboarding begin
         const toneReadyPromise = window.Tone ? Promise.resolve(true) : loadTone().then(() => true).catch(() => false); // [Fix AUD-01] Prime Tone load alongside unlock gesture
         setIsUnlockingAudio(true);
@@ -2551,9 +2567,10 @@ function App() {
         }
     }, [isUnlockingAudio, audioEngine, safeSetScriptLoadState, safeSetAudioInitFailed, safeSetGameState, safeSetIsUnlockingAudio]);
 
-    const handleNameEntry = useCallback((playerNames) => { 
-        setPlayers(playerNames); 
-        setGameState('turnIntro'); 
+    const handleNameEntry = useCallback((playerNames) => {
+        console.log('[ButtonReact] StartGame handler attached'); // [Fix ButtonReact-05]
+        setPlayers(playerNames);
+        setGameState('turnIntro');
     }, []);
 
     const handleToggleMute = useCallback(() => setIsMuted(prev => !prev), []);
