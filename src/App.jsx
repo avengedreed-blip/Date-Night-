@@ -1485,6 +1485,27 @@ const PowerSurgeEffect = ({ onComplete, reducedMotion }) => (
     />
 );
 
+const ExtremeRoundBackground = React.memo(({ backgroundTheme }) => {
+    useEffect(() => {
+        console.log('[ExtremeRound] Background active'); // [Fix ExtremeBG-03]
+    }, []);
+
+    return (
+        <motion.div
+            key="extreme-round"
+            className="extreme-round-bg"
+            data-theme={backgroundTheme}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
+        >
+            <div className="extreme-round-bg__pulse" />
+            <div className="extreme-round-bg__rays" />
+        </motion.div>
+    );
+});
+
 const ExtremeIntroEffect = ({ theme, reducedMotion }) => (
     <motion.div
         className={`fixed inset-0 z-[125] pointer-events-none extreme-effect-bg ${theme}`}
@@ -2152,6 +2173,7 @@ function App() {
     }, [modalState?.type]);
 
     const mainContentRef = useRef(null); // INTERACT: track gameplay container for selective inerting
+    const extremeBackgroundGuardRef = useRef(false); // [Fix ExtremeBG-02] memoize guard logging state for extreme backdrop
 
     // RELIABILITY: safe inert toggling to avoid null refs on unmount
     useEffect(() => {
@@ -2538,13 +2560,34 @@ function App() {
         let t = currentTheme;
         if (isExtremeMode) t = 'crimsonFrenzy';
         if (modalState.type === 'secretPrompt' || modalState.type === 'secretMessage') t = 'lavenderPromise';
-        
+
         if (t !== backgroundTheme) {
             setPrevBackgroundClass(visualThemes[backgroundTheme]?.bg);
             setActiveBg(prev => (prev === 1 ? 2 : 1));
             setBackgroundTheme(t);
         }
     }, [currentTheme, isExtremeMode, modalState.type, backgroundTheme, visualThemes]);
+
+    const shouldShowExtremeBackground = isExtremeMode || currentTheme === 'crimsonFrenzy' || backgroundTheme === 'crimsonFrenzy'; // [Fix ExtremeBG-01] unify render toggles for extreme aura
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        if (!shouldShowExtremeBackground) {
+            extremeBackgroundGuardRef.current = false;
+            return undefined;
+        }
+        const raf = requestAnimationFrame(() => {
+            const hasExtremeBg = !!document.querySelector('.extreme-round-bg');
+            if (!hasExtremeBg && !extremeBackgroundGuardRef.current) {
+                console.warn('[ExtremeRound] Missing background render condition'); // [Fix ExtremeBG-02]
+                extremeBackgroundGuardRef.current = true;
+            }
+            if (hasExtremeBg) {
+                extremeBackgroundGuardRef.current = false;
+            }
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [shouldShowExtremeBackground, extremeBackgroundGuardRef]);
     
     // [GeminiFix: ForeverPromiseAudio]
     useEffect(() => {
@@ -3186,6 +3229,10 @@ function App() {
                     <RadialLighting reducedMotion={prefersReducedMotion} />
 
                     <AnimatePresence>
+                        {/* // [Fix ExtremeBG-04] ensure extreme aura renders beneath interactive overlays */}
+                        {shouldShowExtremeBackground && (
+                            <ExtremeRoundBackground backgroundTheme={backgroundTheme} />
+                        )}
                         {showConfetti && (
                             <Confetti key="confetti" onFinish={() => setShowConfetti(false)} origin={confettiOrigin} theme={currentTheme} reducedMotion={prefersReducedMotion} />
                         )}
