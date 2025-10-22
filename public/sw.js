@@ -1,3 +1,4 @@
+// [Fix SW-006] Cache warmup hardening and clone safety
 // RELIABILITY: simple offline cache; avoids blocked Workbox import
 // [Fix CSSPreload-002] Bump version to invalidate caches holding stale CSS assets
 const APP_VERSION = '1.3.1';
@@ -67,9 +68,32 @@ self.addEventListener('message', (event) => {
     });
     self.__ASSET_MANIFEST = Array.from(new Set([...self.__ASSET_MANIFEST, ...normalized])); // [Fix SW-002]
     event.waitUntil(
-      caches.open(CACHE_VERSION).then((cache) => cache.addAll(normalized).catch((err) => {
-        console.warn('[Reliability] Failed to warm asset cache:', err);
-      }))
+      (async () => {
+        const cache = await caches.open(CACHE_VERSION);
+        for (const asset of normalized) {
+          if (asset.includes('fonts.googleapis.com') || asset.includes('fonts.gstatic.com')) {
+            continue;
+          }
+          try {
+            const response = await fetch(asset);
+            if (!response) {
+              console.warn('[Reliability] Skipped warm cache entry (no response):', asset);
+              continue;
+            }
+            if (!response.ok || response.type === 'opaque') {
+              console.warn('[Reliability] Skipped warm cache entry (unusable response):', asset, response.status);
+              continue;
+            }
+            try {
+              await cache.put(asset, response.clone());
+            } catch (cloneErr) {
+              console.warn('[Reliability] Failed to cache warm asset clone:', asset, cloneErr);
+            }
+          } catch (err) {
+            console.warn('[Reliability] Failed to warm asset cache entry:', asset, err);
+          }
+        }
+      })()
     );
   };
 
@@ -95,6 +119,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const bypassCache = url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com');
+
   const isNavigationRequest = request.mode === 'navigate' || request.destination === 'document';
   const isScriptRequest = request.destination === 'script' || url.endsWith('.js');
   const isStyleRequest = request.destination === 'style' || url.endsWith('.css');
@@ -104,10 +130,15 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const networkResponse = await fetch(request);
-          if (networkResponse && networkResponse.ok) {
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, networkResponse.clone()));
-            return networkResponse;
+          if (networkResponse && networkResponse.ok && networkResponse.type !== 'opaque' && !bypassCache) {
+            try {
+              const copy = networkResponse.clone();
+              caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+            } catch (err) {
+              console.warn('[Reliability] Skip clone for script/style response:', url, err);
+            }
           }
+          return networkResponse;
         } catch (err) {
           console.warn('[Reliability] SW asset fetch failed:', url, err); // [Fix SW-003]
         }
@@ -127,9 +158,13 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const net = await fetch(request);
-          if (net && net.ok) {
-            const copy = net.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          if (net && net.ok && net.type !== 'opaque' && !bypassCache) {
+            try {
+              const copy = net.clone();
+              caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+            } catch (err) {
+              console.warn('[Reliability] Skip clone for navigation response:', url, err);
+            }
           }
           return net;
         } catch (err) {
@@ -151,8 +186,13 @@ self.addEventListener('fetch', (event) => {
         const cached = await caches.match(request);
         if (cached) return cached;
         const net = await fetch(request);
-        if (net && net.ok) {
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, net.clone()));
+        if (net && net.ok && net.type !== 'opaque' && !bypassCache) {
+          try {
+            const copy = net.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          } catch (err) {
+            console.warn('[Reliability] Skip clone for response:', url, err);
+          }
         }
         return net;
       } catch (err) {
