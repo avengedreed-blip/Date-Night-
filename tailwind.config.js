@@ -25,5 +25,11 @@ export default {
     preflight: true,
   },
   plugins: [],
-  safelist: [{ pattern: /(text|bg|border|ring)-\[var\(--.+\)\]/ }],
+  safelist: [
+    'text-[var(--theme-highlight)]', // [Fix BOOT-004] Preserve theme-driven text utility
+    'text-[var(--theme-label)]', // [Fix BOOT-004]
+    'ring-[var(--theme-highlight)]', // [Fix BOOT-004]
+    'focus:border-[var(--theme-highlight)]', // [Fix BOOT-004]
+    'focus:ring-[var(--theme-highlight)]', // [Fix BOOT-004]
+  ],
 };

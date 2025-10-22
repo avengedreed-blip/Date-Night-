@@ -115,29 +115,28 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   }
   // PWA: force update on each load
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    const warmAssetUrls = []; // [Fix SW-002]
+    const warmAssetSet = new Set(); // [Fix BOOT-004] Ensure deduplicated warm cache manifest
     if (import.meta.env.PROD) {
       try {
-        const discoveredAssets = import.meta.glob(['./**/*.js', './**/*.css'], { as: 'url', eager: true }); // [Fix SW-002]
-        const normalizedAssets = new Set();
+        const discoveredAssets = import.meta.glob(['./**/*.js', './**/*.css'], { eager: true, query: '?url', import: 'default' }); // [Fix BOOT-004]
         Object.values(discoveredAssets ?? {}).forEach((url) => {
           if (!url) return;
           try {
             const normalized = new URL(url, window.location.origin);
-            normalizedAssets.add(normalized.pathname + normalized.search);
+            warmAssetSet.add(normalized.pathname + normalized.search); // [Fix BOOT-004] Normalize to pathname for SW
           } catch {
-            normalizedAssets.add(url);
+            warmAssetSet.add(url);
           }
         });
-        warmAssetUrls.push(...normalizedAssets);
       } catch (err) {
-        console.warn('[PWA] Failed to resolve asset manifest for precache warmup:', err); // [Fix SW-002]
+        console.warn('[PWA] Failed to resolve asset manifest for precache warmup:', err); // [Fix BOOT-004]
       }
     }
 
-    const postAssetManifest = (registration) => { // [Fix SW-002]
+    const warmAssetUrls = Array.from(warmAssetSet); // [Fix BOOT-004]
+    const postAssetManifest = (registration) => { // [Fix BOOT-004]
       if (!warmAssetUrls.length) return;
-      const payload = { type: 'WARM_URLS', urls: warmAssetUrls }; // [Fix SW-002]
+      const payload = { type: 'WARM_URLS', urls: warmAssetUrls }; // [Fix BOOT-004]
       const targets = [
         registration?.installing,
         registration?.waiting,
@@ -153,8 +152,34 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       });
     };
 
-    if (warmAssetUrls.length) {
-      navigator.serviceWorker.getRegistration().then(postAssetManifest).catch(() => {});
+    const primeExistingRegistration = () => {
+      if (!warmAssetUrls.length) return;
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          postAssetManifest(reg); // [Fix BOOT-004]
+        }
+      }).catch(() => {});
+    };
+
+    const registerServiceWorker = () => {
+      const swUrl = '/sw.js';
+      return navigator.serviceWorker.register(swUrl, { scope: '/' })
+        .then((registration) => {
+          postAssetManifest(registration); // [Fix BOOT-004]
+          return registration;
+        })
+        .catch((err) => {
+          console.warn('[PWA] Service worker registration failed:', err); // [Fix BOOT-004]
+          throw err;
+        });
+    };
+
+    primeExistingRegistration();
+
+    if (document.readyState === 'complete') {
+      registerServiceWorker().catch(() => {});
+    } else {
+      window.addEventListener('load', () => { registerServiceWorker().catch(() => {}); }, { once: true });
     }
 
     navigator.serviceWorker.ready
@@ -165,7 +190,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
     if (warmAssetUrls.length) {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        navigator.serviceWorker.getRegistration().then(postAssetManifest).catch(() => {});
+        primeExistingRegistration();
       });
     }
   }
