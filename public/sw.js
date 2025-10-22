@@ -1,3 +1,4 @@
+// [Polish SW-007] Quiet service worker logging and diagnostics filter
 // [Fix SW-006] Cache warmup hardening and clone safety
 // RELIABILITY: simple offline cache; avoids blocked Workbox import
 // [Fix CSSPreload-002] Bump version to invalidate caches holding stale CSS assets
@@ -10,7 +11,24 @@ const precacheBaseSet = new Set([...CORE_ASSETS, ...self.__ASSET_MANIFEST]); // 
 const warmRuntimeAssets = new Set(); // [Fix SW-002]
 let skipWaitingRequested = false; // [Fix PWA-04]
 
+const seenDiagnostics = new Set();
 const resolvePrecacheAssets = () => [...new Set([...precacheBaseSet, ...warmRuntimeAssets])]; // [Fix SW-002]
+
+const isIgnorableError = (message = '') => {
+  const normalized = String(message || '').toLowerCase();
+  return (
+    normalized.includes('body is already used') ||
+    normalized.includes('request failed') ||
+    normalized.includes('fetch failed')
+  );
+};
+
+const logOnce = (level, key, ...args) => {
+  const mapKey = `${level}:${key}`;
+  if (seenDiagnostics.has(mapKey)) return;
+  seenDiagnostics.add(mapKey);
+  console[level](...args);
+};
 
 self.addEventListener('install', (event) => {
   // RELIABILITY: pre-cache core shell assets for offline bootstrap.
@@ -18,7 +36,9 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_VERSION).then((cache) =>
       cache.addAll(resolvePrecacheAssets()).catch(err => {
         // RELIABILITY: log but do not reject install when optional asset is missing.
-        console.warn('[Reliability] Cache preload failed:', err);
+        if (!isIgnorableError(err && err.message)) {
+          logOnce('warn', 'cache-preload', '[Reliability] Cache preload failed:', err);
+        }
       })
     )
   );
@@ -72,6 +92,7 @@ self.addEventListener('message', (event) => {
         const cache = await caches.open(CACHE_VERSION);
         for (const asset of normalized) {
           if (asset.includes('fonts.googleapis.com') || asset.includes('fonts.gstatic.com')) {
+            logOnce('info', 'fonts-skip', '[Reliability] Skipping font asset from cache warmup:', asset);
             continue;
           }
           try {
@@ -79,10 +100,12 @@ self.addEventListener('message', (event) => {
             if (response && response.ok && response.type !== 'opaque' && !response.bodyUsed) {
               await cache.put(asset, response.clone());
             } else {
-              console.warn('[Reliability] Skipped warm cache entry:', asset);
+              logOnce('warn', `warm-skip:${asset}`, '[Reliability] Skipped warm cache entry:', asset);
             }
           } catch (err) {
-            console.warn('[Reliability] Skipped warm cache entry:', asset, err);
+            if (!isIgnorableError(err && err.message)) {
+              logOnce('warn', `warm-error:${asset}`, '[Reliability] Skipped warm cache entry:', asset, err);
+            }
           }
         }
       })()
@@ -133,12 +156,16 @@ self.addEventListener('fetch', (event) => {
               const copy = networkResponse.clone();
               caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
             } catch (err) {
-              console.warn('[Reliability] Skip clone for script/style response:', url, err);
+              if (!isIgnorableError(err && err.message)) {
+                logOnce('warn', `clone:script-style:${url}`, '[Reliability] Skip clone for script/style response:', url, err);
+              }
             }
           }
           return networkResponse;
         } catch (err) {
-          console.warn('[Reliability] SW asset fetch failed:', url, err); // [Fix SW-003]
+          if (!isIgnorableError(err && err.message)) {
+            logOnce('warn', `fetch-script:${url}`, '[Reliability] SW asset fetch failed:', url, err); // [Fix SW-003]
+          }
         }
         const cache = await caches.open(CACHE_VERSION);
         const cached = await cache.match(request);
@@ -161,12 +188,16 @@ self.addEventListener('fetch', (event) => {
               const copy = net.clone();
               caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
             } catch (err) {
-              console.warn('[Reliability] Skip clone for navigation response:', url, err);
+              if (!isIgnorableError(err && err.message)) {
+                logOnce('warn', `clone:navigation:${url}`, '[Reliability] Skip clone for navigation response:', url, err);
+              }
             }
           }
           return net;
         } catch (err) {
-          console.warn('[Reliability] SW fetch failed:', url, err);
+          if (!isIgnorableError(err && err.message)) {
+            logOnce('warn', `fetch-navigation:${url}`, '[Reliability] SW fetch failed:', url, err);
+          }
           const cached = await caches.match(request) || await caches.match('/index.html');
           if (cached) {
             return cached;
@@ -189,12 +220,16 @@ self.addEventListener('fetch', (event) => {
             const copy = net.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
           } catch (err) {
-            console.warn('[Reliability] Skip clone for response:', url, err);
+            if (!isIgnorableError(err && err.message)) {
+              logOnce('warn', `clone:generic:${url}`, '[Reliability] Skip clone for response:', url, err);
+            }
           }
         }
         return net;
       } catch (err) {
-        console.warn('[Reliability] SW fetch failed (non-critical):', url, err);
+        if (!isIgnorableError(err && err.message)) {
+          logOnce('warn', `fetch-generic:${url}`, '[Reliability] SW fetch failed (non-critical):', url, err);
+        }
         const cachedFallback = await caches.match(request);
         if (cachedFallback) {
           return cachedFallback;
