@@ -870,6 +870,7 @@ const Wheel = React.memo(({onSpinFinish, onSpinStart, playWheelSpinStart, playWh
 
   // INTERACT: long-press detection for secret round
   const onSecretPointerDown = useCallback((e) => {
+    if (e.cancelable) { e.preventDefault(); } // [Fix APP-005] Stop default text-selection during long-press detection
     if (e.pointerType === 'mouse' && e.button !== 0) return; // INTERACT: ignore non-primary mouse buttons
     if (!canSpin || spinLock.current) return; // INTERACT: block secret gesture when wheel unavailable
     clearLongPressTimer(); // [Fix RC-02] reset any prior timers before scheduling a new long press
@@ -1460,7 +1461,29 @@ const AudioUnlockScreen = ({ onUnlock, disabled, activeVisualTheme }) => (
         <div className="onboarding-content-block">
           <h1 className="text-8xl font-['Great_Vibes']" style={{ filter: `drop-shadow(0 0 15px ${activeVisualTheme.titleShadow})` }}>Pulse</h1>
           <p className="text-xl mt-4 text-white/80 max-w-xs">The intimate couples game. <br/>Best with sound on.</p>
-          <motion.button onClick={() => { console.log('[ButtonReact] Begin handler attached'); /* [Fix ButtonReact-02] */ onUnlock?.(); }} disabled={disabled} className="btn btn--primary mt-12 text-2xl px-12 py-5 begin-button" whileTap={{ scale: 0.95 }}>
+          <motion.button
+            disabled={disabled}
+            className="btn btn--primary mt-12 text-2xl px-12 py-5 begin-button"
+            whileTap={{ scale: 0.95 }}
+            onPointerDown={(event) => {
+              if (event.cancelable) { event.preventDefault(); } // [Fix APP-005] Suppress text highlight on long-press gestures
+              if (disabled) return;
+              void unlockAudioEngine(); // [Fix APP-005] Prime Tone unlock as soon as pointer engages
+            }}
+            onClick={async (event) => {
+              event.preventDefault();
+              console.log('[ButtonReact] Begin handler attached'); // [Fix ButtonReact-02]
+              if (disabled) return;
+              try {
+                await unlockAudioEngine(); // [Fix APP-005] Guarantee unlock occurs before boot sequence continues
+              } catch (err) {
+                console.warn('[Reliability] Unlock attempt from Begin failed:', err); // [Fix APP-005]
+              }
+              if (typeof onUnlock === 'function') {
+                await onUnlock();
+              }
+            }}
+          >
               {disabled ? <SpinLoader /> : "Begin"}
           </motion.button>
         </div>
@@ -1524,7 +1547,23 @@ const PlayerNameScreen = ({ onStart, activeVisualTheme }) => {
             <div className="onboarding-content-block">
                 <h2 className="text-4xl font-bold">Who's Playing?</h2>
                 {/* // QA: add accessible identifiers for onboarding form */}
-                <form id="player-name-form" name="player-name-form" onSubmit={(e) => { e.preventDefault(); console.log('[ButtonReact] StartGame handler attached'); /* [Fix ButtonReact-05] */ onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' }); }} className="flex flex-col gap-5 mt-8 w-full max-w-xs">
+                <form
+                    id="player-name-form"
+                    name="player-name-form"
+                    onSubmit={async (event) => {
+                        event.preventDefault();
+                        console.log('[ButtonReact] StartGame handler attached'); // [Fix ButtonReact-05]
+                        if (typeof onStart === 'function') {
+                            try {
+                                await unlockAudioEngine(); // [Fix APP-005] Chain unlock with start gesture to avoid AudioContext blocks
+                            } catch (err) {
+                                console.warn('[Reliability] Unlock attempt from Start failed:', err); // [Fix APP-005]
+                            }
+                            await onStart({ p1: p1 || 'Player 1', p2: p2 || 'Player 2' });
+                        }
+                    }}
+                    className="flex flex-col gap-5 mt-8 w-full max-w-xs"
+                >
                     <div className="metallic-input-wrapper">
                         {/* // QA: ensure player one field has identifiers */}
                         <input id="player-one-name" name="player-one-name" type="text" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="Player 1 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/>
@@ -1533,7 +1572,15 @@ const PlayerNameScreen = ({ onStart, activeVisualTheme }) => {
                         {/* // QA: ensure player two field has identifiers */}
                         <input id="player-two-name" name="player-two-name" type="text" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="Player 2 Name" className="w-full h-full p-4 text-center text-xl text-[var(--theme-highlight)]"/>
                     </div>
-                    <motion.button type="submit" className="btn btn--primary text-xl px-10 py-4 mt-4" whileTap={{ scale: 0.95 }}>Start Game</motion.button>
+                    <motion.button
+                        type="submit"
+                        className="btn btn--primary text-xl px-10 py-4 mt-4"
+                        whileTap={{ scale: 0.95 }}
+                        onPointerDown={(event) => { if (event.cancelable) { event.preventDefault(); } }} // [Fix APP-005] Block text selection during long press
+                        onClick={(event) => { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }}
+                    >
+                        Start Game
+                    </motion.button>
                 </form>
             </div>
         </OnboardingScreen>
@@ -2171,6 +2218,24 @@ function App() {
             setPulseLevel(next);
         }
     }, [setPulseLevel]);
+
+    const startGame = useCallback(async (playerNames) => {
+        const normalizedPlayers = {
+            p1: typeof playerNames?.p1 === 'string' && playerNames.p1.trim() ? playerNames.p1 : 'Player 1',
+            p2: typeof playerNames?.p2 === 'string' && playerNames.p2.trim() ? playerNames.p2 : 'Player 2',
+        };
+        try {
+            await unlockAudioEngine(); // [Fix APP-005] Ensure Tone unlock precedes gameplay transitions
+        } catch (err) {
+            console.warn('[Reliability] startGame unlock attempt failed:', err); // [Fix APP-005]
+        }
+        if (isMounted.current) {
+            setPlayers(normalizedPlayers); // [Fix APP-005]
+        }
+        safeSetGameState('turnIntro'); // [Fix APP-005]
+        return normalizedPlayers;
+    }, [safeSetGameState, setPlayers]);
+
     const setModalState = safeSetModalState; // [Fix TDZ-001] Reuse guarded setter across call sites.
 
     const turnIntroTimeoutRef = useRef(null);
@@ -2608,11 +2673,9 @@ function App() {
         }
     }, [isUnlockingAudio, audioEngine, safeSetScriptLoadState, safeSetAudioInitFailed, safeSetGameState, safeSetIsUnlockingAudio]);
 
-    const handleNameEntry = useCallback((playerNames) => {
-        console.log('[ButtonReact] StartGame handler attached'); // [Fix ButtonReact-05]
-        setPlayers(playerNames);
-        setGameState('turnIntro');
-    }, []);
+    const handleNameEntry = useCallback(async (playerNames) => {
+        await startGame(playerNames); // [Fix APP-005]
+    }, [startGame]);
 
     const handleToggleMute = useCallback(() => setIsMuted(prev => !prev), []);
 
