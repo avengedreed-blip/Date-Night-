@@ -4,14 +4,17 @@ const CACHE_VERSION = `pulse-shell-${APP_VERSION}`;
 // RELIABILITY: Removed /favicon.ico to prevent install rejection on missing asset
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 self.__ASSET_MANIFEST = Array.isArray(self.__ASSET_MANIFEST) ? self.__ASSET_MANIFEST : []; // [Fix PWA-02]
-const PRECACHE_ASSETS = [...new Set([...CORE_ASSETS, ...self.__ASSET_MANIFEST])]; // [Fix PWA-02]
+const precacheBaseSet = new Set([...CORE_ASSETS, ...self.__ASSET_MANIFEST]); // [Fix SW-002]
+const warmRuntimeAssets = new Set(); // [Fix SW-002]
 let skipWaitingRequested = false; // [Fix PWA-04]
+
+const resolvePrecacheAssets = () => [...new Set([...precacheBaseSet, ...warmRuntimeAssets])]; // [Fix SW-002]
 
 self.addEventListener('install', (event) => {
   // RELIABILITY: pre-cache core shell assets for offline bootstrap.
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(PRECACHE_ASSETS).catch(err => {
+      cache.addAll(resolvePrecacheAssets()).catch(err => {
         // RELIABILITY: log but do not reject install when optional asset is missing.
         console.warn('[Reliability] Cache preload failed:', err);
       })
@@ -41,24 +44,36 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 
-  if (event.data.type === 'CACHE_URLS' && Array.isArray(event.data.payload)) {
-    // RELIABILITY: allow manual warmup of assets requested by the client.
-    const urls = event.data.payload
+  const queueWarmUrls = (urls) => { // [Fix SW-002]
+    const normalized = (Array.isArray(urls) ? urls : [])
       .map((url) => {
         try {
-          const normalized = new URL(url, self.location.origin);
-          return normalized.pathname + normalized.search;
+          const normalizedUrl = new URL(url, self.location.origin);
+          return normalizedUrl.pathname + normalizedUrl.search;
         } catch {
           return url;
         }
       })
       .filter(Boolean);
-    self.__ASSET_MANIFEST = Array.from(new Set([...self.__ASSET_MANIFEST, ...urls])); // [Fix PWA-02]
+    if (!normalized.length) return;
+    normalized.forEach((asset) => {
+      warmRuntimeAssets.add(asset);
+      precacheBaseSet.add(asset);
+    });
+    self.__ASSET_MANIFEST = Array.from(new Set([...self.__ASSET_MANIFEST, ...normalized])); // [Fix SW-002]
     event.waitUntil(
-      caches.open(CACHE_VERSION).then((cache) => cache.addAll(urls).catch((err) => {
+      caches.open(CACHE_VERSION).then((cache) => cache.addAll(normalized).catch((err) => {
         console.warn('[Reliability] Failed to warm asset cache:', err);
       }))
     );
+  };
+
+  if (event.data.type === 'WARM_URLS') {
+    queueWarmUrls(event.data.urls);
+  }
+
+  if (event.data.type === 'CACHE_URLS') {
+    queueWarmUrls(event.data.payload);
   }
 });
 
@@ -75,10 +90,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const isDocOrJs =
-    request.destination === 'document' || url.endsWith('.js');
+  const isNavigationRequest = request.mode === 'navigate' || request.destination === 'document';
+  const isScriptRequest = request.destination === 'script' || url.endsWith('.js');
+  const isStyleRequest = request.destination === 'style' || url.endsWith('.css');
 
-  if (isDocOrJs) {
+  if (isScriptRequest || isStyleRequest) {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetch(request);
+          if (networkResponse && networkResponse.ok) {
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, networkResponse.clone()));
+            return networkResponse;
+          }
+        } catch (err) {
+          console.warn('[Reliability] SW asset fetch failed:', url, err); // [Fix SW-003]
+        }
+        const cache = await caches.open(CACHE_VERSION);
+        const cached = await cache.match(request);
+        if (cached) {
+          return cached; // [Fix SW-003]
+        }
+        return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } }); // [Fix SW-003]
+      })()
+    );
+    return;
+  }
+
+  if (isNavigationRequest) {
     event.respondWith(
       (async () => {
         try {
@@ -90,32 +129,37 @@ self.addEventListener('fetch', (event) => {
           return net;
         } catch (err) {
           console.warn('[Reliability] SW fetch failed:', url, err);
-          const cached = await caches.match(request) || await caches.match('/index.html'); // [Fix F2] Provide offline document fallback
+          const cached = await caches.match(request) || await caches.match('/index.html');
           if (cached) {
             return cached;
           }
-          return new Response('<h1>Offline</h1>', { headers: { 'Content-Type': 'text/html' } }); // [Fix F2] Serve minimal offline shell
+          return new Response('<h1>Offline</h1>', { headers: { 'Content-Type': 'text/html' } });
         }
       })()
     );
-  } else {
-    event.respondWith(
-      (async () => {
-        try {
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          return await fetch(request);
-        } catch (err) {
-          console.warn('[Reliability] SW fetch failed (non-critical):', url, err);
-          const cachedFallback = await caches.match(request) || await caches.match('/index.html'); // [Fix H3]
-          if (cachedFallback) {
-            return cachedFallback; // [Fix H3]
-          }
-          return new Response('Service Unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } }); // [Fix PWA-01]
-        }
-      })()
-    );
+    return;
   }
+
+  event.respondWith(
+    (async () => {
+      try {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        const net = await fetch(request);
+        if (net && net.ok) {
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, net.clone()));
+        }
+        return net;
+      } catch (err) {
+        console.warn('[Reliability] SW fetch failed (non-critical):', url, err);
+        const cachedFallback = await caches.match(request);
+        if (cachedFallback) {
+          return cachedFallback;
+        }
+        return new Response('Service Unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } }); // [Fix PWA-01]
+      }
+    })()
+  );
 });
 
 self.addEventListener('sync', (event) => {

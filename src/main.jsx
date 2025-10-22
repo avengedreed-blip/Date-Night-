@@ -115,17 +115,13 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   }
   // PWA: force update on each load
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    const warmAssetUrls = []; // [Fix PWA-02]
+    const warmAssetUrls = []; // [Fix SW-002]
     if (import.meta.env.PROD) {
       try {
-        const entryAssets = import.meta.glob('/src/main.jsx', { import: 'default', eager: true, query: '?url' });
-        const styleAssets = import.meta.glob('/src/index.css', { import: 'default', eager: true, query: '?url' });
-        const assetSet = new Set([
-          ...Object.values(entryAssets ?? {}),
-          ...Object.values(styleAssets ?? {}),
-        ]);
+        const discoveredAssets = import.meta.glob(['./**/*.js', './**/*.css'], { as: 'url', eager: true }); // [Fix SW-002]
         const normalizedAssets = new Set();
-        assetSet.forEach((url) => {
+        Object.values(discoveredAssets ?? {}).forEach((url) => {
+          if (!url) return;
           try {
             const normalized = new URL(url, window.location.origin);
             normalizedAssets.add(normalized.pathname + normalized.search);
@@ -135,28 +131,41 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         });
         warmAssetUrls.push(...normalizedAssets);
       } catch (err) {
-        console.warn('[PWA] Failed to resolve asset manifest for precache warmup:', err); // [Fix PWA-02]
+        console.warn('[PWA] Failed to resolve asset manifest for precache warmup:', err); // [Fix SW-002]
       }
     }
 
-    const postAssetManifest = (registration) => { // [Fix PWA-02]
+    const postAssetManifest = (registration) => { // [Fix SW-002]
       if (!warmAssetUrls.length) return;
-      const controller = registration?.active || navigator.serviceWorker.controller;
-      if (controller) {
-        controller.postMessage({ type: 'CACHE_URLS', payload: warmAssetUrls });
-      }
+      const payload = { type: 'WARM_URLS', urls: warmAssetUrls }; // [Fix SW-002]
+      const targets = [
+        registration?.installing,
+        registration?.waiting,
+        registration?.active,
+        navigator.serviceWorker.controller,
+      ].filter(Boolean);
+      targets.forEach((worker) => {
+        try {
+          worker.postMessage(payload);
+        } catch (err) {
+          console.warn('[PWA] Failed to post warm cache manifest:', err);
+        }
+      });
     };
+
+    if (warmAssetUrls.length) {
+      navigator.serviceWorker.getRegistration().then(postAssetManifest).catch(() => {});
+    }
 
     navigator.serviceWorker.ready
       .then((reg) => {
-        // [Fix PWA-04] Update requests handled during registration to prevent duplicate refresh loops.
         postAssetManifest(reg);
       })
       .catch(() => {});
 
     if (warmAssetUrls.length) {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        navigator.serviceWorker.ready.then(postAssetManifest).catch(() => {});
+        navigator.serviceWorker.getRegistration().then(postAssetManifest).catch(() => {});
       });
     }
   }
