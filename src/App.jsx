@@ -12,7 +12,7 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, Motio
 // RELIABILITY: Lazily access prompt storage to avoid TDZ on circular imports.
 import { getDbStoreInstance, subscribePromptStoreFallback } from './utils/promptStoreCore.js'; // RELIABILITY: lazy access to store to avoid TDZ
 // RELIABILITY: load gesture logic first (inert)
-import { attachAudioGestureListeners, silenceToneErrors, unlockAudioEngine } from './audioGate.js'; // [Fix AudioUnlock-AU-007] Surface centralized unlock helper to UI layer
+import { attachAudioGestureListeners, silenceToneErrors, unlockAudioEngine, recoverAudio } from './audioGate.js'; // [Fix AudioUnlock-AU-007] Surface centralized unlock helper to UI layer
 // RELIABILITY: then load core engine (lazy async Tone)
 import { getAudioEngine, loadTone } from './core/audioCore.js'; // [Fix H2]
 
@@ -177,6 +177,12 @@ const themeProfiles = Object.freeze({
     music: "Forever Promise",
   },
 });
+
+const themeClassFromId = (themeId = '') => {
+  if (typeof themeId !== 'string' || !themeId.trim()) return '';
+  const dashed = themeId.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+  return `theme-${dashed}`;
+};
 
 
 // --- DATA & PROMPTS ---
@@ -2291,7 +2297,7 @@ function App() {
     const pendingPromptRef = useRef(null);
     const spinWatchdogRef = useRef(null);
 
-    const visualThemes = {
+    const visualThemes = useMemo(() => ({
         velourNights: { bg: 'theme-velour-nights-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-velour-nights' },
         lotusDreamscape: { bg: 'theme-lotus-dreamscape-bg', titleText: 'text-white', titleShadow: '#F777B6', themeClass: 'theme-lotus-dreamscape' },
         velvetCarnival: { bg: 'theme-velvet-carnival-bg', titleText: 'text-white', titleShadow: '#FFD700', themeClass: 'theme-velvet-carnival' },
@@ -2299,9 +2305,46 @@ function App() {
         crimsonFrenzy: { bg: 'theme-crimson-frenzy-bg', titleText: 'text-white', titleShadow: '#ff0000', themeClass: 'theme-crimson-frenzy' },
         lavenderPromise: { bg: 'theme-lavender-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-lavender-promise' },
         foreverPromise: { bg: 'theme-forever-promise-bg', titleText: 'text-white', titleShadow: '#e2d4ff', themeClass: 'theme-forever-promise' },
-    };
+    }), []);
     const activeVisualTheme = visualThemes[currentTheme] || visualThemes.velourNights;
     const activeBackgroundClass = visualThemes[backgroundTheme]?.bg || visualThemes.velourNights.bg;
+
+    const resolveThemeClassName = useCallback((themeId) => {
+        return visualThemes[themeId]?.themeClass || themeClassFromId(themeId);
+    }, [visualThemes]);
+
+    const applyThemeToDom = useCallback((themeId) => {
+        if (typeof document === 'undefined') return;
+
+        const body = document.body;
+        const html = document.documentElement;
+        const targetClass = resolveThemeClassName(themeId);
+        const themedNodes = [body, html].filter(Boolean);
+
+        themedNodes.forEach((node) => {
+            const classesToRemove = Array.from(node.classList).filter((cls) => cls.startsWith('theme-') && cls !== targetClass);
+            if (classesToRemove.length) {
+                node.classList.remove(...classesToRemove);
+            }
+        });
+
+        if (body) {
+            if (!body.classList.contains('theme-reset')) {
+                body.classList.add('theme-reset');
+            }
+            // Force repaint to prevent blended gradients from the previous theme.
+            void body.offsetWidth;
+            body.classList.remove('theme-reset');
+        }
+
+        if (targetClass) {
+            themedNodes.forEach((node) => {
+                if (node && !node.classList.contains(targetClass)) {
+                    node.classList.add(targetClass);
+                }
+            });
+        }
+    }, [resolveThemeClassName]);
 
     const [prevBackgroundClass, setPrevBackgroundClass] = useState(activeBackgroundClass);
 
@@ -2322,6 +2365,7 @@ function App() {
     // RELIABILITY: apply stored or default theme immediately on mount
     useEffect(() => {
         if (typeof document === 'undefined') return;
+        applyThemeToDom(initialThemeRef.current);
         const theme = themeProfiles[initialThemeRef.current];
         if (theme?.background) {
             document.documentElement.style.setProperty('--theme-bg', theme.background);
@@ -2330,7 +2374,7 @@ function App() {
                 appContainer.style.background = theme.background; // RELIABILITY: prime container background on mount.
             }
         }
-    }, []);
+    }, [applyThemeToDom]);
 
     // VISUAL: derive RGB from theme accent for dynamic glow
     function hexToRgb(hex) {
@@ -2341,6 +2385,7 @@ function App() {
     // RELIABILITY: ensure full theme propagation including background sync
     useEffect(() => {
         if (typeof document === 'undefined') return;
+        applyThemeToDom(currentTheme);
         const theme = themeProfiles[currentTheme];
         if (!theme) return;
 
@@ -2372,7 +2417,7 @@ function App() {
         }
 
         console.info(`[Reliability] Theme synchronized: ${theme.name}`);
-    }, [currentTheme]);
+    }, [currentTheme, applyThemeToDom]);
 
     useEffect(() => {
         try {
@@ -2560,17 +2605,32 @@ function App() {
             return;
         }
         console.log('[ButtonReact] ThemeChange handler attached'); // [Fix ButtonReact-06]
-        const next = themeId;
+        const next = themeId.trim();
+        applyThemeToDom(next);
         setCurrentTheme(prev => (previousThemeRef.current = prev, next));
         const audioTheme = (next === 'lavenderPromise' || next === 'foreverPromise') ? 'firstDanceMix' : next;
+
+        try {
+            if (typeof audioEngine.stopTheme === 'function') {
+                await audioEngine.stopTheme();
+            }
+        } catch (stopError) {
+            console.warn('[Theme] Music stop failed', stopError);
+        }
+
+        try {
+            await recoverAudio();
+        } catch (recoverError) {
+            console.warn('[Theme] Audio recovery attempt skipped', recoverError);
+        }
 
         try {
             await audioEngine.startTheme(audioTheme);
         } catch(e) {
             console.error("Failed to start theme audio", e)
-        } 
-    
-    }, [setCurrentTheme, previousThemeRef, audioEngine]);
+        }
+
+    }, [setCurrentTheme, previousThemeRef, audioEngine, applyThemeToDom]);
 
     const triggerExtremeRound = useCallback((source) => {
         const wheelEl = mainContentRef.current?.querySelector('.spin-button');
@@ -3031,6 +3091,7 @@ function App() {
                         <main className="w-full flex-grow flex flex-col items-center justify-start pt-4 md:pt-0 md:justify-center px-4" style={{ perspective: "1000px" }}>
                             {gameState !== 'secretLoveRound' && 
                                 <Wheel
+                                    key={`wheel-${currentTheme}`}
                                     onSpinFinish={handleSpinFinish}
                                     onSpinStart={handleSpinStart}
                                     playWheelSpinStart={audioEngine.playWheelSpinStart}
